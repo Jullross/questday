@@ -12,6 +12,11 @@ const extra = (process.env.NODE_PATH || '').split(path.delimiter).filter(Boolean
 const resolve = (id) => require.resolve(id, { paths: [root, ...extra] });
 const esbuild = await import(pathToFileURL(resolve('esbuild')).href);
 
+// Variáveis do .env (só as conhecidas). No GitHub Actions vêm das "Variables" do repositório.
+const envFile = path.join(root, '.env');
+if (fs.existsSync(envFile)) for (const ln of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) { const m = ln.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/); if (m && process.env[m[1]] == null) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, ''); }
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 const tmp = fs.mkdtempSync(path.join(root, '.build-'));
@@ -26,7 +31,7 @@ fs.writeFileSync(entry, `import React from 'react';import * as RDC from 'react-d
 import {${names.map((n) => `Lu${alias[n] || n} as ${n}`).join(',')}} from 'react-icons/lu';
 window.React=React;window.ReactDOM={...RDC,createPortal};window.LucideReact={${names.join(',')}};`);
 const nodePaths = [path.join(root, 'node_modules'), ...extra];
-const common = { bundle: true, minify: true, write: false, target: 'es2019', logLevel: 'warning', nodePaths, define: { 'process.env.NODE_ENV': '"production"' } };
+const common = { bundle: true, minify: true, write: false, target: 'es2019', logLevel: 'warning', nodePaths, define: { 'process.env.NODE_ENV': '"production"', __GOOGLE_CLIENT_ID__: JSON.stringify(GOOGLE_CLIENT_ID) } };
 const vendor = (await esbuild.build({ ...common, entryPoints: [entry] })).outputFiles[0].text;
 
 // 2) App: JSX com React global (o vendor expõe window.React).
@@ -51,4 +56,4 @@ const build = Date.now().toString(36);
 fs.writeFileSync(path.join(dist, 'sw.js'), fs.readFileSync(path.join(dist, 'sw.js'), 'utf8').replace('__BUILD__', build));
 fs.writeFileSync(path.join(dist, '.nojekyll'), '');
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log(`dist/index.html ${(html.length / 1024).toFixed(0)} KB · ${names.length} ícones · build ${build}`);
+console.log(`dist/index.html ${(html.length / 1024).toFixed(0)} KB · ${names.length} ícones · build ${build} · Google Agenda ${GOOGLE_CLIENT_ID ? 'configurada' : 'sem Client ID'}`);

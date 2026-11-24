@@ -9,7 +9,7 @@ Planner adaptativo e babá eletrônica para TDAH e autismo. Monta a semana sozin
 - **Conta e aparelhos**: login com e-mail/senha ou Google, dados sincronizados na nuvem, versões anteriores.
 - **App instalável (PWA)**: ícone na tela inicial, funciona offline.
 - **Lembretes com o app fechado**: notificações push 10 min antes de blocos e compromissos, e na hora dos remédios e refeições.
-- **Google Agenda**: importa os compromissos dos próximos 14 dias (só leitura).
+- **Google Agenda e .ics**: importa os compromissos dos próximos 14 dias da Google Agenda (OAuth, só leitura) ou de um arquivo .ics (Google, Outlook, Apple, portal da faculdade), com recorrências semanais.
 
 ## Estrutura
 
@@ -46,5 +46,5 @@ Usa o mesmo projeto do Fluxo Previsto, com tabelas próprias (`qd_*`) e RLS: cad
 
 1. **Authentication → URL Configuration → Redirect URLs**: adicionar `https://jullross.github.io/questday/**`.
 2. **Authentication → Providers → Google**: ligar com o Client ID e o Client Secret de um cliente OAuth do Google Cloud (tipo "Aplicativo da Web", URI de redirecionamento `https://ziycnzsjhnswwrpotasp.supabase.co/auth/v1/callback`).
-3. **Google Agenda**: no mesmo projeto do Google Cloud, ativar a *Google Calendar API* e, na tela de consentimento, adicionar o escopo `calendar.readonly` e o seu e-mail como usuário de teste.
+3. **Google Agenda**: no Google Cloud, ativar a *Google Calendar API*; criar um cliente OAuth "Aplicativo da Web" com origens JavaScript `https://jullross.github.io` e `http://localhost:8000`; na tela de consentimento, adicionar o escopo `calendar.readonly` e o seu e-mail como usuário de teste. O Client ID vai em `GOOGLE_CLIENT_ID` (arquivo `.env` local, e em Settings → Secrets and variables → Actions → **Variables** no GitHub).
 4. **Edge Functions → Secrets**: `GEMINI_API_KEY` (já existe, compartilhada com o Fluxo Previsto).

@@ -220,7 +220,7 @@ function nextAnchor(s) {
 }
 
 /* ===================== energia ===================== */
-const fixedPlan = (s, day) => s.fixed.filter((f) => f.days.includes(weekdayOf(day)) && !(f.sem && s.semester && (day < s.semester.start || day > s.semester.end))).map((f) => ({ ...f, s: toMin(f.start), e: toMin(f.end) })).sort((a, b) => a.s - b.s);
+const fixedPlan = (s, day) => s.fixed.filter((f) => f.days.includes(weekdayOf(day)) && !(f.from != null && day < f.from) && !(f.until != null && day > f.until) && !(f.sem && s.semester && (day < s.semester.start || day > s.semester.end))).map((f) => ({ ...f, s: toMin(f.start), e: toMin(f.end) })).sort((a, b) => a.s - b.s);
 function fixedAll(s, day) {
   const log = (s.fixedLog || {})[day] || {};
   const hol = holidayOn(s, day), vac = vacationOn(s, day);
@@ -698,14 +698,15 @@ function usePopover(W, H) {
 const pickCell = (on, dis) => `h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
 const centerPicked = (refs) => refs.forEach((r) => { const c = r.current, el = c && c.querySelector('[aria-pressed="true"]'); if (el) c.scrollTop = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2; });
 // Duração (horas + minutos): mesmo visual do seletor de horário, com todas as horas e minutos e campo para digitar.
-function DurField({ value, onChange, label, min = 0, maxH = 12, className = '' }) {
+function DurField({ value, onChange, label, min = 0, className = '' }) {
+  const MAX = 23 * 60 + 59;
   const v = Math.max(0, Math.round(value || 0)), h = Math.floor(v / 60), m = v % 60;
   const P = usePopover(240, 330), hRef = useRef(null), mRef = useRef(null);
   const [txt, setTxt] = useState(String(v));
   useEffect(() => { if (P.open && P.pos) centerPicked([hRef, mRef]); }, [P.open, !!P.pos]);
   useEffect(() => { setTxt(String(v)); }, [v]);
-  const set = (hh, mm) => onChange(Math.max(min, hh * 60 + mm));
-  const hours = Array.from({ length: Math.max(maxH, h) + 1 }, (_, i) => i), mins = Array.from({ length: 60 }, (_, i) => i);
+  const set = (hh, mm) => onChange(Math.min(MAX, Math.max(min, hh * 60 + mm)));
+  const hours = Array.from({ length: 24 }, (_, i) => i), mins = Array.from({ length: 60 }, (_, i) => i);
   const fmt = h ? `${h}h${m ? String(m).padStart(2, '0') : ''}` : `${m} min`;
   return (
     <div className={'relative ' + (className.includes('mt-') ? className.split(' ').filter((c) => c.startsWith('mt-')).join(' ') : '')} ref={P.ref}>
@@ -719,7 +720,7 @@ function DurField({ value, onChange, label, min = 0, maxH = 12, className = '' }
             <div><p className="text-xs text-zinc-500 px-1 pb-1">Minutos</p>
               <div ref={mRef} className="picker relative h-48 overflow-y-auto grid gap-0.5 pr-1">{mins.map((x) => { const dis = h * 60 + x < min; return <button type="button" key={x} aria-pressed={x === m} disabled={dis} className={pickCell(x === m, dis)} onClick={() => set(h, x)}>{String(x).padStart(2, '0')}</button>; })}</div></div>
           </div>
-          <label className="flex items-center gap-2 px-1 pt-2 text-xs text-zinc-500">Ou digite<input type="number" inputMode="numeric" min={min} value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={() => { const n = Math.round(Number(txt)); if (Number.isFinite(n) && n >= 0) onChange(Math.max(min, n)); else setTxt(String(v)); }}
+          <label className="flex items-center gap-2 px-1 pt-2 text-xs text-zinc-500">Ou digite<input type="number" inputMode="numeric" min={min} max={MAX} value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={() => { const n = Math.round(Number(txt)); if (Number.isFinite(n) && n >= 0) { const c = Math.min(MAX, Math.max(min, n)); onChange(c); setTxt(String(c)); } else setTxt(String(v)); }}
             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-20 h-8 rounded-md bg-zinc-950 border border-white/10 px-2 text-sm text-zinc-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-[#9f8fff]/60" aria-label={`${label} em minutos`} />min</label>
           <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
         </div>, document.body)}
@@ -742,6 +743,19 @@ function SimTimeField({ value, onChange }) {
         </div>, document.body)}
     </div>
   );
+}
+// Aviso de sono curto: sugere o horário de dormir a partir do horário de acordar (7h a 8h de sono).
+function SleepWarn({ bed, wake, onApply }) {
+  const h = sleepHours(bed, wake), [keep, setKeep] = useState(null);
+  if (h >= 6 || keep === `${bed}-${wake}`) return null;
+  const w = toMin(wake), rec = hhmm(w - 450), b7 = hhmm(w - 420), b8 = hhmm(w - 480);
+  return (
+    <div className="rounded-xl border border-[#ffc24d]/30 bg-[#ffc24d]/[0.07] p-4 space-y-3 rise" role="status">
+      <p className="text-sm text-zinc-100 flex items-start gap-2"><Ic n="MoonStar" className="w-4 h-4 mt-0.5 text-[#ffc24d] shrink-0" /><span><b className="font-medium">{fmtH(h)} por noite é pouco.</b> Dormir menos de 6h não é recomendável: pesa na energia, no foco e na saúde, e o resto do dia fica mais difícil.</span></p>
+      <p className="text-sm text-zinc-300">Para acordar às <b className="font-medium text-zinc-100">{wake}</b>, recomendo ir dormir por volta das <b className="font-medium text-zinc-100">{rec}</b> (7h30 de sono). Entre {b8} e {b7} você fica entre 8h e 7h.</p>
+      <div className="flex flex-wrap gap-2"><button type="button" className={btnP + ' min-h-[38px] h-9 text-sm'} onClick={() => onApply(rec)}><Ic n="Moon" className="w-4 h-4" />Usar horário recomendado</button>
+        <button type="button" className={btnL} onClick={() => setKeep(`${bed}-${wake}`)}>Manter o meu horário</button></div>
+    </div>);
 }
 function DayChips({ days, onChange }) {
   return (
@@ -1297,7 +1311,7 @@ function ProjectForm({ f, setF, onSave, onCancel }) {
     <div className="grid grid-cols-2 gap-3 p-4 pt-0">
       <div className="col-span-2"><label className={lbl}>Meta grande</label><input className={inp} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Ex.: Atualizar o portfólio" /></div>
       <div><label className={lbl}>Tempo total (h)</label><input type="number" min="0.5" step="0.5" className={inp} value={f.totalMin / 60} onChange={(e) => setF({ ...f, totalMin: Math.round((Number(e.target.value) || 0.5) * 60) })} /></div>
-      <div><p className={lbl}>Tamanho de cada passo</p><DurField label="Tamanho de cada passo" min={10} maxH={3} value={f.blockMin} onChange={(v) => setF({ ...f, blockMin: v })} /></div>
+      <div><p className={lbl}>Tamanho de cada passo</p><DurField label="Tamanho de cada passo" min={10} value={f.blockMin} onChange={(v) => setF({ ...f, blockMin: v })} /></div>
       <div><label className={lbl}>Carga mental</label><Seg value={f.load} onChange={(v) => setF({ ...f, load: v })} options={[['pesada', 'Pesada'], ['media', 'Média'], ['leve', 'Leve']]} label="Carga" /></div>
       <div><label className={lbl}>Prazo (opcional)</label><input type="date" className={inp} value={f.due != null ? isoOf(f.due) : ''} onChange={(e) => setF({ ...f, due: e.target.value ? dayFromIso(e.target.value) : null })} /></div>
       <p className="col-span-2 text-sm text-zinc-500">Vira {Math.ceil((f.totalMin - (f.doneMin || 0)) / f.blockMin)} passos de {f.blockMin} min, no máximo um por dia.</p>
@@ -1305,18 +1319,70 @@ function ProjectForm({ f, setF, onSave, onCancel }) {
     </div>
   );
 }
-function parseWeeklyIcs(txt) {
-  const BY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }, out = [];
-  txt.replace(/\r?\n[ \t]/g, '').split('BEGIN:VEVENT').slice(1).forEach((b) => {
-    const get = (k) => { const m = b.match(new RegExp('(?:^|\\n)' + k + '[^:\\n]*:([^\\r\\n]*)')); return m ? m[1].trim() : ''; };
-    const st = get('DTSTART').match(/T(\d{2})(\d{2})/), en = get('DTEND').match(/T(\d{2})(\d{2})/), rr = get('RRULE');
-    if (!st || !/FREQ=WEEKLY/.test(rr)) return;
-    const by = (rr.match(/BYDAY=([^;]+)/) || [])[1];
-    const d0 = get('DTSTART').match(/(\d{4})(\d{2})(\d{2})/);
-    const days = by ? by.split(',').map((x) => BY[x.slice(-2)]).filter((x) => x != null) : d0 ? [new Date(Date.UTC(+d0[1], d0[2] - 1, +d0[3])).getUTCDay()] : [];
-    if (!days.length) return;
-    out.push({ id: uid(), type: 'compromisso', title: (get('SUMMARY') || 'Compromisso').replace(/\\,/g, ','), days, start: `${st[1]}:${st[2]}`, end: en ? `${en[1]}:${en[2]}` : hhmm(toMin(`${st[1]}:${st[2]}`) + 60) });
-  });
+/* ===================== iCalendar (.ics) ===================== */
+// Lê VEVENTs (SUMMARY, DTSTART, DTEND, RRULE, UID). Horários com Z viram hora local; com TZID são convertidos do fuso.
+function tzOffsetMin(utcMs, tz) {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(utcMs)).map((x) => [x.type, x.value]));
+    return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - utcMs) / 60000;
+  } catch (e) { return null; }
+}
+function icsDate(v, params) {
+  const m = String(v || '').match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/); if (!m) return null;
+  const [, Y, Mo, D, hh, mm, ss, z] = m;
+  if (!hh || /VALUE=DATE(?!-)/.test(params || '')) return { allDay: true, date: new Date(+Y, +Mo - 1, +D) };
+  if (z) return { date: new Date(Date.UTC(+Y, +Mo - 1, +D, +hh, +mm, +(ss || 0))) };
+  const tz = ((params || '').match(/TZID=([^;:]+)/) || [])[1];
+  if (tz) { const guess = Date.UTC(+Y, +Mo - 1, +D, +hh, +mm, +(ss || 0)); const o1 = tzOffsetMin(guess, tz); if (o1 != null) { const o2 = tzOffsetMin(guess - o1 * 60000, tz); return { date: new Date(guess - (o2 != null ? o2 : o1) * 60000) }; } }
+  return { date: new Date(+Y, +Mo - 1, +D, +hh, +mm, +(ss || 0)) };
+}
+function parseIcs(txt) {
+  const lines = String(txt || '').replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const evs = []; let cur = null;
+  const unesc = (v) => v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+  for (const ln of lines) {
+    if (ln === 'BEGIN:VEVENT') { cur = {}; continue; }
+    if (ln === 'END:VEVENT') { if (cur) evs.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const i = ln.indexOf(':'); if (i < 0) continue;
+    const head = ln.slice(0, i), val = ln.slice(i + 1), [name, ...ps] = head.split(';'), params = ps.join(';');
+    const N = name.toUpperCase();
+    if (N === 'SUMMARY') cur.title = unesc(val);
+    else if (N === 'UID') cur.uid = val.trim();
+    else if (N === 'DTSTART') cur.start = icsDate(val.trim(), params);
+    else if (N === 'DTEND') cur.end = icsDate(val.trim(), params);
+    else if (N === 'DURATION') { const d = val.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?/); if (d) cur.durMin = (+(d[1] || 0)) * 1440 + (+(d[2] || 0)) * 60 + (+(d[3] || 0)); }
+    else if (N === 'RRULE') cur.rrule = Object.fromEntries(val.split(';').map((kv) => kv.split('=')).filter((kv) => kv.length === 2).map(([k, v]) => [k.toUpperCase(), v]));
+    else if (N === 'STATUS') cur.status = val.trim().toUpperCase();
+    else if (N === 'RECURRENCE-ID') cur.recurrenceId = true;
+  }
+  return evs;
+}
+const dayOfDate = (d) => Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / DAYMS);
+const minOfDate = (d) => d.getHours() * 60 + d.getMinutes();
+// Separa em: horários semanais fixos (RRULE semanal/diária) e compromissos com data (eventos únicos no futuro).
+function icsToQuestDay(txt, today) {
+  const BY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 }, out = { weekly: [], once: [], skipped: { allDay: 0, past: 0, other: 0 }, total: 0 };
+  for (const e of parseIcs(txt)) {
+    out.total++;
+    if (!e.start || e.status === 'CANCELLED' || e.recurrenceId) { out.skipped.other++; continue; }
+    if (e.start.allDay) { out.skipped.allDay++; continue; }
+    const st = e.start.date, en = e.end && !e.end.allDay ? e.end.date : new Date(st.getTime() + (e.durMin || 60) * 60000);
+    let a = minOfDate(st), b = minOfDate(en); if (en - st >= DAYMS || b <= a) b = Math.min(1439, a + Math.max(15, Math.round((en - st) / 60000) || 60));
+    const title = (e.title || 'Compromisso').slice(0, 80), startDay = dayOfDate(st);
+    const rr = e.rrule;
+    if (rr && (rr.FREQ === 'WEEKLY' || rr.FREQ === 'DAILY') && (!rr.INTERVAL || rr.INTERVAL === '1')) {
+      let until = null;
+      if (rr.UNTIL) { const u = icsDate(rr.UNTIL, ''); if (u) until = dayOfDate(u.date); }
+      if (rr.COUNT && !until) until = startDay + (rr.FREQ === 'DAILY' ? +rr.COUNT - 1 : Math.ceil(+rr.COUNT / Math.max(1, (rr.BYDAY || 'x').split(',').length)) * 7);
+      if (until != null && until < today) { out.skipped.past++; continue; }
+      const days = rr.FREQ === 'DAILY' ? [0, 1, 2, 3, 4, 5, 6] : rr.BYDAY ? [...new Set(rr.BYDAY.split(',').map((x) => BY[x.slice(-2)]).filter((x) => x != null))].sort() : [st.getDay()];
+      if (!days.length) { out.skipped.other++; continue; }
+      out.weekly.push({ id: uid(), ics: e.uid || `${title}-${a}-${days.join('')}`, type: 'compromisso', title, days, start: hhmm(a), end: hhmm(b), ...(startDay > today ? { from: startDay } : {}), ...(until != null ? { until } : {}) });
+    } else if (rr) out.skipped.other++;
+    else if (startDay < today) out.skipped.past++;
+    else out.once.push({ id: `ics:${e.uid || title}:${st.getTime()}`, title, day: startDay, start: a, end: b });
+  }
   return out;
 }
 
@@ -2376,7 +2442,7 @@ function TaskForm({ f, setF, onSave, onCancel, onDelete }) {
         <option value={0}>Avulsa (uma vez)</option>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}x por semana</option>)}<option value={7}>Todo dia</option></select></div>
       <div><label className={lbl}>Mínimo viável</label><input className={inp} value={f.minText} onChange={(e) => set({ minText: e.target.value })} placeholder="Ex.: 5 palavras" /></div>
       <div className="col-span-2"><label className={lbl}>Primeiro passo de 2 min (opcional)</label><input className={inp} value={f.firstStep || ''} onChange={(e) => set({ firstStep: e.target.value })} placeholder="Ex.: abrir o caderno na página da lista" /></div>
-      <div><p className={lbl}>Mínimo</p><DurField label="Mínimo" min={1} maxH={2} value={f.min} onChange={(v) => set({ min: v, durTouched: true })} /></div>
+      <div><p className={lbl}>Mínimo</p><DurField label="Mínimo" min={1} value={f.min} onChange={(v) => set({ min: v, durTouched: true })} /></div>
       {f.freq === 0 && <div className="col-span-2"><label className={lbl}>Prazo (opcional)</label><input type="date" className={inp} value={f.due != null ? isoOf(f.due) : ''} onChange={(e) => set({ due: e.target.value ? dayFromIso(e.target.value) : null })} /></div>}
       <div className="col-span-2 flex flex-wrap gap-2"><button type="button" className={btnP} onClick={() => { if (f.title.trim()) onSave(f); }}>Salvar</button><button type="button" className={btnG} onClick={onCancel}>Cancelar</button>
         {onDelete && <button type="button" className={btnL + ' ml-auto'} onClick={onDelete}><Ic n="Trash2" className="w-3.5 h-3.5" />Excluir</button>}</div>
@@ -2514,7 +2580,7 @@ function AccountPanel({ s, onLoggedIn, initial, onLogout }) {
 }
 function ContaSection({ s, act }) {
   useCloud();
-  const u = Cloud.user, [g, setG] = useState(null), [pmsg, setPmsg] = useState(null), [bk, setBk] = useState(null), [conf, setConf] = useState(null);
+  const u = Cloud.user, [g, setG] = useState(null), [fmsg, setF] = useState(null), [pmsg, setPmsg] = useState(null), [bk, setBk] = useState(null), [conf, setConf] = useState(null);
   useEffect(() => { if (u) Cloud.lumeCheck(); }, [u && u.id]);
   const ai = Cloud.status.aiReady;
   const pushTxt = !Cloud.pushSupported() ? (Pwa.ios && !Pwa.installed ? 'No iPhone, as notificações só funcionam depois de instalar o app na tela de início (abaixo).' : 'Este navegador não recebe notificações push.') : null;
@@ -2523,7 +2589,18 @@ function ContaSection({ s, act }) {
     try { if (Cloud.pushOn) { await Cloud.disablePush(); setPmsg('Notificações desligadas neste aparelho.'); } else { await Cloud.enablePush(); Cloud.setReminders(remindersFor(s)); setPmsg('Pronto. Os lembretes chegam mesmo com o app fechado.'); } }
     catch (e) { setPmsg(e.message === 'denied' ? 'O aparelho não deu permissão. Libere as notificações do QuestDay nas configurações e tente de novo.' : e.status === 401 ? 'Entre na conta primeiro.' : 'Não consegui ligar agora. Tente de novo.'); }
   };
-  const importG = async () => { setG('Buscando…'); try { const ev = await Cloud.gcalEvents(14); const n = act.importGcal(ev); setG(n ? `${n} compromisso${n > 1 ? 's' : ''} entrou na sua semana.` : 'Nada novo: sua agenda dos próximos 14 dias já está aqui.'); } catch (e) { setG(e.status === 401 ? 'A conexão com a Google expirou. Conecte de novo.' : 'Não consegui ler a agenda agora.'); } };
+  const importG = async () => {
+    setG({ busy: true, t: 'Buscando seus compromissos dos próximos 14 dias…' });
+    try {
+      const r = await Cloud.gcalEvents(14), n = act.importGcal(r.events), dup = r.events.length - n;
+      setG({ ok: true, t: !r.total ? 'Sua agenda está vazia nos próximos 14 dias. Nada para importar.' : n ? `${n} compromisso${n > 1 ? 's' : ''} da Google Agenda ${n > 1 ? 'entraram' : 'entrou'} na sua semana.${dup ? ` ${dup} já estava${dup > 1 ? 'm' : ''} aqui.` : ''}${r.allDay ? ` ${r.allDay} de dia inteiro ${r.allDay > 1 ? 'ficaram' : 'ficou'} de fora.` : ''}` : r.events.length ? 'Nada novo: esses compromissos já estavam na sua semana.' : `Só achei evento de dia inteiro (${r.allDay}), que não vira bloco com horário.` });
+    } catch (e) {
+      setG({ err: true, t: e.code === 'no_client_id' ? 'A integração com o Google ainda não foi configurada: falta o Client ID OAuth (GOOGLE_CLIENT_ID no .env do build).' : e.code === 'closed' || e.code === 'denied' ? 'A permissão do Google foi cancelada. Nada foi importado.' : e.code === 'api_disabled' ? 'O Google recusou: a Google Calendar API precisa estar ativada no projeto do Google Cloud.' : e.code === 'expired' ? 'A autorização expirou. Toque em importar de novo.' : e.code === 'offline' ? 'Não consegui falar com o Google agora. Confira a internet.' : 'Não consegui ler a agenda agora. Tente de novo.' });
+    }
+  };
+  const importF = async (fl) => { if (!fl) return; setF({ busy: true, t: `Lendo ${fl.name}…` }); try { const txt = await fl.text(); const r = act.importIcsFile(txt); const n = r.weekly + r.once;
+    setF({ ok: true, t: !r.total ? 'Não achei eventos nesse arquivo. Confira se é um .ics exportado do calendário.' : n ? `Importei ${[r.weekly ? `${r.weekly} horário${r.weekly > 1 ? 's' : ''} semana${r.weekly > 1 ? 'is' : 'l'}` : '', r.once ? `${r.once} compromisso${r.once > 1 ? 's' : ''} com data` : ''].filter(Boolean).join(' e ')}.${r.dupes ? ` ${r.dupes} já estava${r.dupes > 1 ? 'm' : ''} aqui.` : ''}${r.skipped.past ? ` ${r.skipped.past} já ${r.skipped.past > 1 ? 'passaram' : 'passou'}.` : ''}${r.skipped.allDay ? ` ${r.skipped.allDay} de dia inteiro ${r.skipped.allDay > 1 ? 'ficaram' : 'ficou'} de fora.` : ''}` : 'Nada novo: os eventos já estavam aqui, já passaram ou são de dia inteiro.' }); }
+    catch (e) { setF({ err: true, t: 'Não consegui ler esse arquivo.' }); } };
   const loadBk = async () => { try { setBk(await Cloud.backups()); } catch (e) { setBk([]); } };
   const row = (icon, title, sub, right) => <div className="flex items-center gap-3"><span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] text-zinc-300 shrink-0"><Ic n={icon} className="w-4 h-4" /></span><span className="flex-1 min-w-0"><span className="block text-sm text-zinc-100">{title}</span>{sub && <span className="block text-xs text-zinc-500">{sub}</span>}</span>{right}</div>;
   return (
@@ -2539,9 +2616,14 @@ function ContaSection({ s, act }) {
         {pmsg && <p className="text-xs text-zinc-300" role="status">{pmsg}</p>}
       </div>
       <div className={card + ' p-5 space-y-3'}>
-        {row('CalendarArrowUp', 'Google Agenda', u ? 'Traz os compromissos dos próximos 14 dias para a sua semana, como eventos fixos. Só leitura: o QuestDay não muda nada na sua agenda.' : 'Entre na conta para conectar.', null)}
-        {u && <div className="flex flex-wrap gap-2">{Cloud.hasGoogleToken ? <button className={btnG + ' min-h-[38px] h-9 text-sm'} onClick={importG}><Ic n="Download" className="w-3.5 h-3.5" />Importar agora</button> : <button className={btnG + ' min-h-[38px] h-9 text-sm'} onClick={() => Cloud.signInGoogle({ calendar: true })}>Conectar Google Agenda</button>}</div>}
-        {g && <p className="text-xs text-zinc-300" role="status">{g}</p>}
+        {row('CalendarArrowUp', 'Google Agenda e calendários', 'Traz seus compromissos para a semana como blocos fixos. Só leitura: o QuestDay não muda nada no seu calendário.', null)}
+        <div className="flex flex-wrap gap-2">
+          <button className={btnG + ' min-h-[38px] h-9 text-sm'} disabled={g && g.busy} onClick={importG}><Ic n={g && g.busy ? 'RefreshCw' : 'Download'} className={'w-3.5 h-3.5' + (g && g.busy ? ' animate-spin' : '')} />{g && g.busy ? 'Importando…' : 'Importar da Google Agenda (14 dias)'}</button>
+          <label className={btnG + ' min-h-[38px] h-9 text-sm cursor-pointer'}><Ic n="Upload" className="w-3.5 h-3.5" />Arquivo .ics<input type="file" accept=".ics,text/calendar" className="sr-only" onChange={(e) => { importF(e.target.files[0]); e.target.value = ''; }} /></label>
+        </div>
+        {!Cloud.gcalConfigured() && !g && <p className="text-xs text-zinc-500">A conexão direta com a Google Agenda ainda precisa do Client ID OAuth. Enquanto isso, o arquivo .ics funciona: exporte do Google, Outlook, Apple ou do portal da faculdade.</p>}
+        {g && <p className={`text-xs ${g.err ? 'text-[#ffc24d]' : g.busy ? 'text-zinc-400' : 'text-zinc-300'}`} role="status">{g.t}</p>}
+        {fmsg && <p className={`text-xs ${fmsg.err ? 'text-[#ffc24d]' : fmsg.busy ? 'text-zinc-400' : 'text-zinc-300'}`} role="status">{fmsg.t}</p>}
       </div>
       {u && <div className={card + ' p-5 space-y-3'}>
         {row('Sparkles', 'Lume com IA pelo servidor', ai === true ? 'Ligado, com o Gemini. A chave fica guardada no servidor, nunca neste aparelho.' : ai === 'not_configured' ? 'Falta a chave da IA no servidor. Enquanto isso o Lume usa o modo local.' : ai === 'forbidden' ? 'A IA do servidor está liberada só para a conta da dona do app. O modo local continua funcionando.' : ai === false ? 'Não consegui falar com o servidor agora.' : 'Verificando…', null)}
@@ -2824,12 +2906,13 @@ function Cadastro({ s, up, act, sec: sec0, setSec, goTab }) {
               <div><label className={lbl} htmlFor="gw">Acordar às</label><TimeField id="gw" label="Acordar às" value={sg.wake} onChange={(v) => act.setGoal({ wake: v })} /></div>
             </div>
             <p className="text-sm text-zinc-300">Meta: {fmtH(sleepHours(sg.bed, sg.wake))} por noite.</p>
+            <SleepWarn bed={sg.bed} wake={sg.wake} onApply={(b) => act.setGoal({ bed: b })} />
             {s.history.length > 0 && <div className="pt-2 space-y-1"><p className="text-sm text-zinc-400">Últimos check-ins</p>
               {s.history.slice(-7).reverse().map((h) => <p key={h.day} className="text-sm text-zinc-500 flex gap-3"><span className="w-20">{DIAS[weekdayOf(h.day)]} {fmtCurto(h.day)}</span><span>{h.bed}–{h.wake}</span><span className="text-zinc-300">{fmtH(h.sleep)}</span><span>{h.trip} min de trajeto</span></p>)}</div>}
           </div>
           <div className={card + ' p-5 space-y-3'}>
             <p className="text-zinc-100 font-medium">Ritmo do dia</p>
-            <div className="text-sm text-zinc-400 space-y-1.5"><p>Tempo de transição depois do trabalho e do trajeto</p><DurField label="Tempo de transição" maxH={2} value={s.transitionMin} onChange={(v) => act.setCfg({ transitionMin: v })} /></div>
+            <div className="text-sm text-zinc-400 space-y-1.5"><p>Tempo de transição depois do trabalho e do trajeto</p><DurField label="Tempo de transição" value={s.transitionMin} onChange={(v) => act.setCfg({ transitionMin: v })} /></div>
             <p className="text-xs text-zinc-500">Nada é marcado nesse intervalo: dá para chegar, comer e respirar antes de estudar.</p>
           </div>
           <div className={card + ' p-5 space-y-3'}>
@@ -3874,27 +3957,32 @@ function App({ initialTab, onRestart }) {
     openAccount: () => setAcctOpen(true),
     loadRemote: (d, msg) => { if (!d || d.v !== 4) return; setTm(null); setS(fromSaved(d)); notify(msg || 'Trouxe seus dados da nuvem.'); },
     cloudLogin: async () => { const demo = !!sRef.current.demo; const r = await Cloud.reconcile(demo ? null : sRef.current); if (demo && !(r.use === 'remote' && r.data && r.data.v === 4)) { setAcctOpen(false); try { localStorage.removeItem(KEY); } catch (e) {} onRestart && onRestart(); return; } if (r.use === 'remote' && r.data && r.data.v === 4) { setTm(null); setS(fromSaved(r.data)); notify('Pronto: trouxe seus dados da nuvem.'); } else notify('Conta conectada. Seus dados agora ficam salvos na nuvem.'); },
-    importGcal: (evs) => {
+    importDated: (evs, why) => {
       const x0 = sRef.current, have = new Set(x0.tasks.filter((t) => t.gcal).map((t) => t.gcal)), add = [];
       evs.forEach((e) => {
-        if (have.has(e.id)) return;
-        const day = Math.floor((e.start.getTime() - e.start.getTimezoneOffset() * 60000) / DAYMS); if (day < x0.day) return;
-        const a = e.start.getHours() * 60 + e.start.getMinutes(); let b = e.end.getHours() * 60 + e.end.getMinutes();
-        if (e.end - e.start >= DAYMS || b <= a) b = Math.min(1439, a + 60);
-        const dur = b - a, t = semAcento(e.title);
-        const task = { id: uid(), gcal: e.id, title: e.title.trim(), cat: /aula|prova|facul|curso/.test(t) ? 'Faculdade' : /medic|dentista|consulta|terapia|exame/.test(t) ? 'Saúde' : 'Pessoal', prio: 'alta', load: /prova|entrevista|apresentacao/.test(t) ? 'pesada' : 'media', dur, min: dur, minText: 'Ir, mesmo sem render muito', freq: 0, where: 'qualquer', due: day, event: { start: hhmm(a), end: hhmm(b) } };
-        add.push({ task, item: { id: uid(), kind: 'task', ref: task.id, day, start: a, dur, ver: 'normal', prio: 'alta', load: task.load, status: 'pendente', locked: true, why: 'Compromisso da sua Google Agenda: fica fixo aqui.' } });
+        if (have.has(e.id) || e.day < x0.day) return; have.add(e.id);
+        const dur = Math.max(5, e.end - e.start), t = semAcento(e.title);
+        const task = { id: uid(), gcal: e.id, title: e.title.trim(), cat: /aula|prova|facul|curso/.test(t) ? 'Faculdade' : /medic|dentista|consulta|terapia|exame/.test(t) ? 'Saúde' : 'Pessoal', prio: 'alta', load: /prova|entrevista|apresentacao/.test(t) ? 'pesada' : 'media', dur, min: dur, minText: 'Ir, mesmo sem render muito', freq: 0, where: 'qualquer', due: e.day, event: { start: hhmm(e.start), end: hhmm(e.end) } };
+        add.push({ task, item: { id: uid(), kind: 'task', ref: task.id, day: e.day, start: e.start, dur, ver: 'normal', prio: 'alta', load: task.load, status: 'pendente', locked: true, why } });
       });
-      if (add.length) up((x) => adapt(setItems({ ...x, tasks: [...x.tasks, ...add.map((z) => z.task)] }, (items) => [...items, ...add.map((z) => z.item)]), `com ${add.length} compromisso${add.length > 1 ? 's' : ''} da Google Agenda`));
+      if (add.length) up((x) => adapt(setItems({ ...x, tasks: [...x.tasks, ...add.map((z) => z.task)] }, (items) => [...items, ...add.map((z) => z.item)]), `com ${add.length} compromisso${add.length > 1 ? 's' : ''} importado${add.length > 1 ? 's' : ''}`));
       return add.length;
     },
+    importIcsFile: (txt) => {
+      const x0 = sRef.current, r = icsToQuestDay(txt, x0.day);
+      const haveF = new Set(x0.fixed.filter((f) => f.ics).map((f) => f.ics)), weekly = r.weekly.filter((f) => !haveF.has(f.ics));
+      if (weekly.length) up((x) => adapt({ ...x, fixed: [...x.fixed, ...weekly] }, `com ${weekly.length} horário${weekly.length > 1 ? 's' : ''} do calendário`));
+      const once = act.importDated(r.once, 'Compromisso do seu calendário (.ics): fica fixo aqui.');
+      return { weekly: weekly.length, once, dupes: r.weekly.length - weekly.length + (r.once.length - once), skipped: r.skipped, total: r.total };
+    },
+    importGcal: (evs) => act.importDated(evs.map((e) => ({ id: e.id, title: e.title, day: dayOfDate(e.start), start: minOfDate(e.start), end: e.end - e.start >= DAYMS || minOfDate(e.end) <= minOfDate(e.start) ? Math.min(1439, minOfDate(e.start) + 60) : minOfDate(e.end) })), 'Compromisso da sua Google Agenda: fica fixo aqui.'),
     askNotify: async () => {
       if (canCloud() && Cloud.user && Cloud.pushSupported()) { try { await Cloud.enablePush(); up((x) => ({ ...x, notify: true })); notify('Lembretes ligados, mesmo com o app fechado.'); } catch (e) { notify(e.message === 'denied' ? 'O aparelho não deu permissão para notificações.' : 'Não consegui ligar agora.'); } return; }
       if (canCloud() && !Cloud.user) notify('Para receber com o app fechado, entre na conta em Minha Rotina → Conta e aparelhos.');
       try { if (!('Notification' in window)) throw new Error('x'); const r = await Notification.requestPermission(); up((x) => ({ ...x, notify: r === 'granted' })); notify(r === 'granted' ? 'Notificações ativadas.' : 'O navegador não permitiu. Os avisos aparecem dentro do app.'); }
       catch (e) { notify('Aqui na prévia o navegador bloqueia notificações. Os avisos aparecem dentro do app.'); }
     },
-    importIcs: (txt) => { const fx = parseWeeklyIcs(txt); if (!fx.length) { notify('Não achei eventos semanais nesse arquivo.'); return; } up((x) => adapt({ ...x, fixed: [...x.fixed, ...fx] }, `com ${fx.length} horários importados`)); notify(`${fx.length} horários semanais importados.`); },
+    importIcs: (txt) => { const r = act.importIcsFile(txt); const n = r.weekly + r.once; notify(n ? `Importei ${r.weekly ? `${r.weekly} horário${r.weekly > 1 ? 's' : ''} semana${r.weekly > 1 ? 'is' : 'l'}` : ''}${r.weekly && r.once ? ' e ' : ''}${r.once ? `${r.once} compromisso${r.once > 1 ? 's' : ''} com data` : ''}.` : r.total ? 'Nada novo nesse arquivo: os eventos já estavam aqui, já passaram ou são de dia inteiro.' : 'Não achei eventos nesse arquivo.'); },
     nextDay: () => { setTm(null); up((x) => rollover({ ...x, offset: (x.offset || 0) + 1 })); notify('Novo dia. Comece pelo check-in.'); setTab('agora'); },
     reset: () => { setTm(null); setS(freshSeed()); notify('Dados de exemplo restaurados.'); },
     restartOnb: () => onRestart && onRestart(),
@@ -4125,6 +4213,7 @@ function Onboarding({ onDone, onExample, onCloud }) {
       <div className="flex flex-wrap gap-2">{[['Acordo cedo', '22:00', '05:30'], ['Padrão', '23:00', '06:30'], ['Durmo tarde', '01:00', '09:00']].map(([l, b, w]) => chip(a.bed === b && a.wake === w, () => set({ bed: b, wake: w }), l))}</div>
       <div className="grid grid-cols-2 gap-3 max-w-sm"><div><span className="text-xs text-zinc-500">Dormir</span><TimeField id="ob-bed" label="Dormir" value={a.bed} onChange={(v) => set({ bed: v })} /></div><div><span className="text-xs text-zinc-500">Acordar</span><TimeField id="ob-wake" label="Acordar" value={a.wake} onChange={(v) => set({ wake: v })} /></div></div>
       <p className="text-sm text-zinc-500">Meta de sono: {fmtH(sleepHours(a.bed, a.wake))} por noite.</p>
+      <div className="max-w-lg"><SleepWarn bed={a.bed} wake={a.wake} onApply={(b) => set({ bed: b })} /></div>
     </div>);
   if (step === 2) body = (
     <div className="space-y-5"><Q t="O que tem hora marcada na sua semana?" d="Só o que não se mexe. Ative o que existe e preencha o básico." />

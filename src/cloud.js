@@ -47,7 +47,7 @@ async function token() {
   if (!refreshing) refreshing = (async () => {
     try {
       const j = await api('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: JSON.stringify({ refresh_token: session.refresh_token }) }, false);
-      saveSession({ ...fromAuth(j), google: session.google });
+      saveSession(fromAuth(j));
     } catch (e) { if (e.status === 400 || e.status === 401) saveSession(null); }
     finally { refreshing = null; }
   })();
@@ -60,7 +60,6 @@ export const Cloud = {
   get user() { return session ? session.user : null; },
   get status() { return status; },
   get pushOn() { return ls.get(PUSH_ON) === '1'; },
-  get hasGoogleToken() { return !!(session && session.google && session.google.exp > Date.now()); },
 
   // Volta do login com Google: os tokens chegam no endereço (#access_token=...).
   handleRedirect() {
@@ -71,10 +70,9 @@ export const Cloud = {
     const s = fromAuth({ access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_in: p.get('expires_in') });
     if (!s) return null;
     try { s.user = JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); s.user = { id: s.user.sub, email: s.user.email }; } catch (e) {}
-    if (p.get('provider_token')) s.google = { token: p.get('provider_token'), exp: Date.now() + 55 * 60_000 };
     saveSession(s);
     api('/auth/v1/user').then((u) => { if (session && u) saveSession({ ...session, user: { id: u.id, email: u.email } }); }).catch(() => {});
-    return { ok: true, google: !!s.google };
+    return { ok: true };
   },
 
   async signUp(email, password) {
@@ -86,9 +84,8 @@ export const Cloud = {
     const j = await api('/auth/v1/token?grant_type=password', { method: 'POST', body: JSON.stringify({ email, password }) }, false);
     saveSession(fromAuth(j)); return true;
   },
-  signInGoogle({ calendar = false } = {}) {
+  signInGoogle() {
     const q = new URLSearchParams({ provider: 'google', redirect_to: redirectTo() });
-    if (calendar) { q.set('scopes', GCAL_SCOPE); q.set('access_type', 'offline'); q.set('prompt', 'consent'); }
     location.href = `${CFG.url}/auth/v1/authorize?${q}`;
   },
   async recover(email) { await api('/auth/v1/recover?redirect_to=' + encodeURIComponent(redirectTo()), { method: 'POST', body: JSON.stringify({ email }) }, false); return true; },
@@ -185,20 +182,49 @@ export const Cloud = {
   },
   async lume(body) { return api('/functions/v1/qd-lume', { method: 'POST', body: JSON.stringify(body) }); },
 
-  // ---------- Google Agenda (só leitura) ----------
+  // ---------- Google Agenda (só leitura, OAuth 2.0 pelo Google Identity Services) ----------
+  gcalConfigured() { return !!GOOGLE_CLIENT_ID; },
+  // Pede um token de acesso com o escopo calendar.readonly (abre a janela do Google na primeira vez).
+  async gcalToken(prompt) {
+    if (!GOOGLE_CLIENT_ID) throw Object.assign(new Error('no_client_id'), { code: 'no_client_id' });
+    if (gTok && gTok.exp > Date.now() + 60000 && !prompt) return gTok.token;
+    await loadGis();
+    return new Promise((resolve, reject) => {
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID, scope: GCAL_SCOPE, prompt: prompt || '',
+        callback: (r) => { if (r && r.access_token) { gTok = { token: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3600) * 1000 }; resolve(r.access_token); } else reject(Object.assign(new Error(r && r.error || 'denied'), { code: 'denied' })); },
+        error_callback: (e) => reject(Object.assign(new Error((e && e.type) || 'popup'), { code: e && e.type === 'popup_closed' ? 'closed' : 'popup' })),
+      });
+      client.requestAccessToken();
+    });
+  },
+  // events.list da agenda principal: de agora até +days dias, com recorrências já expandidas.
   async gcalEvents(days = 14) {
-    if (!Cloud.hasGoogleToken) throw Object.assign(new Error('google'), { status: 401 });
-    const from = new Date(); from.setHours(0, 0, 0, 0); const to = new Date(from.getTime() + days * 86400000);
-    const q = new URLSearchParams({ timeMin: from.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250' });
-    const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, { headers: { Authorization: `Bearer ${session.google.token}` } });
-    if (r.status === 401) { saveSession({ ...session, google: null }); throw Object.assign(new Error('google'), { status: 401 }); }
-    if (!r.ok) throw new Error(`Google ${r.status}`);
-    const j = await r.json();
-    return (j.items || []).filter((e) => e.status !== 'cancelled' && e.start && e.start.dateTime && e.end && e.end.dateTime)
-      .map((e) => ({ id: e.id, title: e.summary || 'Compromisso', start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) }));
+    const token = await Cloud.gcalToken();
+    const now = new Date(), to = new Date(now.getTime() + days * 86400000), all = [];
+    let pageToken = '';
+    do {
+      const q = new URLSearchParams({ timeMin: now.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', ...(pageToken ? { pageToken } : {}) });
+      const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 401) { gTok = null; throw Object.assign(new Error('google'), { code: 'expired' }); }
+      if (r.status === 403) throw Object.assign(new Error('google'), { code: 'api_disabled' });
+      if (!r.ok) throw Object.assign(new Error(`Google ${r.status}`), { code: 'http' });
+      const j = await r.json(); all.push(...(j.items || [])); pageToken = j.nextPageToken || '';
+    } while (pageToken && all.length < 1000);
+    const timed = all.filter((e) => e.status !== 'cancelled' && e.start && e.start.dateTime && e.end && e.end.dateTime);
+    return { total: all.length, allDay: all.filter((e) => e.start && e.start.date && !e.start.dateTime).length,
+      events: timed.map((e) => ({ id: 'gcal:' + e.id, title: e.summary || 'Compromisso', start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) })) };
   },
 };
-let pushT = null, pending = null, remT = null, lastRem = '';
+let pushT = null, pending = null, remT = null, lastRem = '', gTok = null;
+// Client ID OAuth do Google: vem do .env (GOOGLE_CLIENT_ID) no build. Vazio = integração ainda não configurada.
+const GOOGLE_CLIENT_ID = typeof __GOOGLE_CLIENT_ID__ !== 'undefined' ? __GOOGLE_CLIENT_ID__ : '';
+let gisP = null;
+function loadGis() {
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
+  if (!gisP) gisP = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = () => res(); sc.onerror = () => { gisP = null; rej(Object.assign(new Error('gis'), { code: 'offline' })); }; document.head.appendChild(sc); });
+  return gisP;
+}
 
 function b64u(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
 
