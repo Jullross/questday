@@ -2339,7 +2339,86 @@ function AddToDay({ s, d, act }) {
     </select>
   );
 }
-function Semana({ s, act, en, weekly, setWeekly }) {
+function Semana(props) {
+  const { s, act } = props, view = (s.ui && s.ui.semanaView) || 'semana';
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] w-fit" role="tablist" aria-label="Visualização">
+        {[['semana', 'Semana', 'Columns3'], ['cal', 'Calendário', 'CalendarDays']].map(([k, l, ic]) => <button key={k} role="tab" aria-selected={view === k} onClick={() => act.setUi({ semanaView: k })} className={`h-9 px-3.5 rounded-lg text-sm flex items-center gap-2 press ${view === k ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}><Ic n={ic} className="w-4 h-4" />{l}</button>)}
+      </div>
+      {view === 'cal' ? <MonthCal s={s} act={act} /> : <SemanaGrid {...props} />}
+    </div>);
+}
+// O que aparece num dia do calendário: horários fixos (sem trajetos), compromissos com data e tarefas planejadas.
+function dayAgenda(s, d) {
+  const fx = fixedAll(s, d).filter((f) => !f.skip && f.type !== 'trajeto' && !(f.log && (f.log.st === 'nao'))).map((f) => ({ k: 'fx' + f.id, t: f.title, a: f.s, b: f.e, kind: f.type === 'trabalho' ? 'trabalho' : 'evento', sub: f.type === 'trabalho' ? 'Trabalho' : f.sem ? 'Aula' : 'Horário fixo' }));
+  const its = s.plan.items.filter((it) => it.day === d && it.status !== 'backlog' && it.status !== 'removido' && refOf(s, it)).map((it) => { const r = refOf(s, it), ev = it.kind === 'task' && r.event; return { k: it.id, t: itemTitle(s, it), a: it.start, b: it.start + it.dur, kind: ev ? 'evento' : areaOf(s, it) ? 'cuidado' : 'tarefa', sub: ev ? (r.gcal && String(r.gcal).startsWith('gcal:') ? 'Google Agenda' : r.gcal && String(r.gcal).startsWith('ics:') ? 'Calendário (.ics)' : 'Compromisso') : areaOf(s, it) === 'casa' ? 'Casa' : areaOf(s, it) ? 'Autocuidado' : 'Tarefa', done: it.status === 'feito' }; });
+  return [...fx, ...its].sort((x, y) => (x.a ?? 9999) - (y.a ?? 9999));
+}
+const KIND_C = { evento: 'bg-[#2ee8c4]/15 text-[#7ff0d8]', trabalho: 'bg-white/[0.07] text-zinc-300', tarefa: 'bg-[#9f8fff]/15 text-[#cdc4ff]', cuidado: 'bg-[#ff6fb5]/15 text-[#ffb3d9]' };
+const KIND_DOT = { evento: 'bg-[#2ee8c4]', trabalho: 'bg-zinc-500', tarefa: 'bg-[#9f8fff]', cuidado: 'bg-[#ff6fb5]' };
+const MESES_L = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function MonthCal({ s, act }) {
+  const d0 = dateOf(s.day), [ym, setYm] = useState({ y: d0.getUTCFullYear(), m: d0.getUTCMonth() }), [open, setOpen] = useState(null);
+  const first = Math.floor(Date.UTC(ym.y, ym.m, 1) / DAYMS), lead = (weekdayOf(first) + 6) % 7, start = first - lead;
+  const nDays = new Date(Date.UTC(ym.y, ym.m + 1, 0)).getUTCDate(), weeks = Math.ceil((lead + nDays) / 7);
+  const cells = Array.from({ length: weeks * 7 }, (_, i) => start + i);
+  const go = (k) => setYm((x) => { const t = new Date(Date.UTC(x.y, x.m + k, 1)); return { y: t.getUTCFullYear(), m: t.getUTCMonth() }; });
+  const isCur = ym.y === d0.getUTCFullYear() && ym.m === d0.getUTCMonth();
+  return (
+    <div className={card + ' p-3 sm:p-5 space-y-3'}>
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 text-lg font-semibold text-zinc-50 capitalize">{MESES_L[ym.m]} <span className="text-zinc-500 font-normal">{ym.y}</span></h2>
+        <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-300 hover:bg-white/[0.06] press" aria-label="Mês anterior" onClick={() => go(-1)}><Ic n="ChevronLeft" className="w-4 h-4" /></button>
+        <button className="h-9 px-3 rounded-lg border border-white/10 text-sm text-zinc-300 hover:bg-white/[0.06] disabled:opacity-40 press" disabled={isCur} onClick={() => setYm({ y: d0.getUTCFullYear(), m: d0.getUTCMonth() })}>Hoje</button>
+        <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-300 hover:bg-white/[0.06] press" aria-label="Próximo mês" onClick={() => go(1)}><Ic n="ChevronRight" className="w-4 h-4" /></button>
+      </div>
+      <div className="grid grid-cols-7 text-center text-[11px] uppercase tracking-wide text-zinc-500">{SEMANA.map((w) => <span key={w} className="py-1">{DIAS[w]}</span>)}</div>
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5" role="grid" aria-label={`Calendário de ${MESES_L[ym.m]} de ${ym.y}`}>
+        {cells.map((d) => {
+          const inM = dateOf(d).getUTCMonth() === ym.m, past = d < s.day, ag = dayAgenda(s, d), hol = holidayOn(s, d), vac = vacationOn(s, d);
+          const ev = ag.filter((x) => x.kind === 'evento' || x.kind === 'trabalho'), rest = ag.length - ev.length;
+          return (
+            <button key={d} role="gridcell" onClick={() => setOpen(d)} aria-label={`${fmtDia(d)}: ${ag.length ? `${ag.length} ${ag.length > 1 ? 'itens' : 'item'}` : 'livre'}${hol ? `, ${hol.label}` : ''}${vac ? `, ${vac.label}` : ''}`}
+              className={`relative text-left min-h-[64px] sm:min-h-[108px] rounded-lg sm:rounded-xl border p-1 sm:p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] ${d === s.day ? 'border-[#9f8fff]/60 bg-[#9f8fff]/[0.08]' : 'border-white/[0.06] hover:bg-white/[0.04]'} ${inM ? '' : 'opacity-35'} ${past && d !== s.day ? 'opacity-60' : ''}`}>
+              <span className={`flex items-center justify-between text-xs sm:text-sm tabular-nums ${d === s.day ? 'text-[#cdc4ff] font-semibold' : 'text-zinc-300'}`}>{dateOf(d).getUTCDate()}
+                {(hol || vac) && <span className={`hidden sm:inline text-[10px] truncate ml-1 ${vac ? 'text-[#7ff0d8]' : 'text-[#ffc24d]'}`}>{vac ? vac.label : hol.label}</span>}</span>
+              <span className="hidden sm:block mt-1 space-y-0.5">
+                {ev.slice(0, 3).map((x) => <span key={x.k} className={`block truncate rounded px-1.5 py-0.5 text-[11px] leading-tight ${KIND_C[x.kind]}`}>{x.a != null && <span className="tabular-nums opacity-70 mr-1">{hhmm(x.a)}</span>}{x.t}</span>)}
+                {ev.length > 3 && <span className="block text-[10px] text-zinc-500 px-1">+{ev.length - 3} compromisso{ev.length - 3 > 1 ? 's' : ''}</span>}
+                {rest > 0 && <span className="block text-[10px] text-zinc-500 px-1">{rest} tarefa{rest > 1 ? 's' : ''} e cuidado{rest > 1 ? 's' : ''}</span>}
+              </span>
+              <span className="sm:hidden absolute left-1 right-1 bottom-1 flex flex-wrap gap-0.5">{ag.slice(0, 5).map((x) => <i key={x.k} className={`w-1.5 h-1.5 rounded-full ${KIND_DOT[x.kind]}`} />)}{(hol || vac) && <i className={`w-1.5 h-1.5 rounded-full ${vac ? 'bg-[#2ee8c4]' : 'bg-[#ffc24d]'}`} />}</span>
+            </button>);
+        })}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">{[['evento', 'Compromisso'], ['trabalho', 'Trabalho'], ['tarefa', 'Tarefa'], ['cuidado', 'Casa e cuidado']].map(([k, l]) => <span key={k} className="flex items-center gap-1.5"><i className={`w-2 h-2 rounded-full ${KIND_DOT[k]}`} />{l}</span>)}
+        <span className="text-zinc-600">Tarefas aparecem até onde a semana já foi planejada.</span></div>
+      {open != null && <DayModal s={s} act={act} d={open} onClose={() => setOpen(null)} />}
+    </div>);
+}
+function DayModal({ s, act, d, onClose }) {
+  const [adding, setAdding] = useState(false), ag = dayAgenda(s, d), hol = holidayOn(s, d), vac = vacationOn(s, d), canAdd = d >= s.day;
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
+  const groups = [['Compromissos', ag.filter((x) => x.kind === 'evento' || x.kind === 'trabalho')], ['Tarefas', ag.filter((x) => x.kind === 'tarefa')], ['Casa e cuidado', ag.filter((x) => x.kind === 'cuidado')]].filter(([, xs]) => xs.length);
+  const draft = { title: '', recurring: false, day: d, days: [], start: d === s.day ? hhmm(Math.min(1380, Math.ceil((nowRef(s) + 30) / 30) * 30)) : '09:00', end: d === s.day ? hhmm(Math.min(1439, Math.ceil((nowRef(s) + 30) / 30) * 30 + 60)) : '10:00' };
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[70] grid place-items-end sm:place-items-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="dm-t" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4 pop-in">
+        <div className="flex items-start gap-3"><div className="flex-1"><h2 id="dm-t" className="text-lg font-semibold text-zinc-50 capitalize">{fmtDia(d)}</h2>
+          <p className="text-xs text-zinc-500">{d === s.day ? 'Hoje' : d === s.day + 1 ? 'Amanhã' : d < s.day ? 'Já passou' : `Daqui a ${d - s.day} dias`}{hol ? ` · ${hol.label}` : ''}{vac ? ` · ${vac.label} (rotina em pausa)` : ''}</p></div>
+          <button className="w-9 h-9 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
+        {groups.length ? groups.map(([g, xs]) => <section key={g} className="space-y-1.5"><p className="text-xs uppercase tracking-wide text-zinc-500">{g}</p>
+          <ul className="space-y-1.5">{xs.map((x) => <li key={x.k} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2"><i className={`w-1.5 self-stretch rounded-full ${KIND_DOT[x.kind]}`} />
+            <span className="w-24 shrink-0 text-xs text-zinc-400 tabular-nums">{x.a != null ? `${hhmm(x.a)}–${hhmm(x.b)}` : 'sem hora'}</span>
+            <span className="flex-1 min-w-0"><span className={`block text-sm truncate ${x.done ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>{x.t}</span><span className="block text-[11px] text-zinc-500">{x.sub}</span></span></li>)}</ul></section>)
+          : <p className="text-sm text-zinc-500">Nada marcado neste dia.</p>}
+        {canAdd ? (adding ? <EventCard s={s} draft={draft} onApply={(f) => { act.addEvent(f); setAdding(false); }} /> : <button className={btnP + ' w-full'} onClick={() => setAdding(true)}><Ic n="Plus" />Adicionar neste dia</button>)
+          : <p className="text-xs text-zinc-600">Não dá para marcar compromissos em dias que já passaram.</p>}
+      </div>
+    </div>, document.body);
+}
+function SemanaGrid({ s, act, en, weekly, setWeekly }) {
   const [sel, setSel] = useState(null);
   const gridRef = useRef(null);
   useEffect(() => { const g = gridRef.current; if (!g) return; const i = s.plan.days.indexOf(s.day); const el = g.children[i]; if (el && i > 1) g.scrollLeft = el.offsetLeft - g.offsetLeft - 8; }, []);
@@ -2454,7 +2533,8 @@ function FixedForm({ f, setF, onSave, onCancel, onDelete }) {
   return (
     <div className="grid grid-cols-2 gap-3 p-4 pt-0">
       <div className="col-span-2"><p className={lbl}>Tipo</p><Seg value={f.type} onChange={(v) => set({ type: v })} options={Object.entries(TIPOS)} label="Tipo de bloco" /></div>
-      <div className="col-span-2"><label className={lbl}>Nome</label><input className={inp} value={f.title} onChange={(e) => set({ title: e.target.value })} /></div>
+      <div className="col-span-2"><label className={lbl} htmlFor={`fx-nome-${f.id || 'novo'}`}>Nome</label><input id={`fx-nome-${f.id || 'novo'}`} type="text" autoComplete="off" maxLength={60} className={inp} value={f.title} placeholder={f.type === 'trabalho' ? 'Ex.: Estágio, Trabalho' : f.type === 'trajeto' ? 'Ex.: Ida para a faculdade' : 'Ex.: Faculdade, Academia, Terapia'} onChange={(e) => set({ title: e.target.value })} />
+        {!f.title.trim() && <p className="text-xs text-zinc-500 mt-1">Dê um nome para salvar.</p>}</div>
       <div className="col-span-2"><p className={lbl}>Dias</p><DayChips days={f.days} onChange={(d) => set({ days: d })} /></div>
       <div><label className={lbl} htmlFor="fs">Começa</label><TimeField id="fs" label="Começa" value={f.start} onChange={(v) => set({ start: v })} /></div>
       <div><label className={lbl} htmlFor="fe">Termina</label><TimeField id="fe" label="Termina" value={f.end} onChange={(v) => set({ end: v })} /></div>
@@ -3519,6 +3599,7 @@ function AddTaskCard({ s, draft, onApply, applied }) {
     </div>
   );
 }
+const fitTa = (el) => { if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; };
 function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, act }) {
   const [text, setText] = useState('');
   const [cfg, setCfg] = useState(false);
@@ -3529,6 +3610,7 @@ function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, a
   const mood = petMood(s, en);
   useEffect(() => { if (open) { setTimeout(() => inRef.current && inRef.current.focus(), 50); } }, [open]);
   useEffect(() => { endRef.current && endRef.current.scrollIntoView({ block: 'end' }); }, [msgs, open]);
+  useEffect(() => { if (!text) fitTa(inRef.current); }, [text]);
   useEffect(() => { if (!open) return; const k = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [open]);
   const send = async (raw, quick) => {
     const m = (raw || '').trim(); if (!m || busy) return;
@@ -3569,10 +3651,10 @@ function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, a
         {!aiOn && !cfg && <button className="mx-4 mt-3 rounded-xl border border-dashed border-[#9f8fff]/40 px-3 py-2 text-left text-xs text-zinc-400 hover:bg-white/[0.03]" onClick={() => setCfg(true)}><span className="text-[#cdc4ff]">Quer o Lume com IA de verdade?</span> Ele conversa e mexe no app por você. Toque para configurar.</button>}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3" aria-live="polite">
           {msgs.map((m) => m.role === 'user' ? (
-            <div key={m.id} className="flex justify-end"><p className="max-w-[85%] rounded-2xl rounded-br-md bg-[#9f8fff]/15 text-zinc-100 px-3.5 py-2 text-[15px]">{m.text}</p></div>
+            <div key={m.id} className="flex justify-end"><p className="max-w-[85%] rounded-2xl rounded-br-md bg-[#9f8fff]/15 text-zinc-100 px-3.5 py-2 text-[15px] whitespace-pre-wrap break-words">{m.text}</p></div>
           ) : (
             <div key={m.id} className="space-y-2 max-w-[92%]">
-              <p className="text-[15px] text-zinc-300 leading-relaxed"><Rich text={m.text} /></p>
+              <p className="text-[15px] text-zinc-300 leading-relaxed whitespace-pre-wrap break-words"><Rich text={m.text} /></p>
               {(m.cards || []).map((c) => c.kind === 'addTask'
                 ? <AddTaskCard key={c.id} s={s} draft={c.draft} applied={c.applied} onApply={(d) => apply(m.id, c.id, 'addTask', d)} />
                 : c.kind === 'event' ? <EventCard key={c.id} s={s} draft={c.draft} applied={c.applied} onApply={(d) => apply(m.id, c.id, 'addEvent', d)} />
@@ -3591,8 +3673,13 @@ function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, a
         </div>
         <div className="border-t border-white/[0.06] p-3 space-y-2.5">
           <div className="flex gap-1.5 overflow-x-auto">{chips.map(([l, q]) => <button key={l} className="shrink-0 h-9 px-3 rounded-full text-sm bg-white/[0.05] text-zinc-300 hover:bg-white/[0.09] disabled:opacity-40" disabled={busy} onClick={() => send(l, q)}>{l}</button>)}</div>
-          <div className="flex gap-2">
-            <input ref={inRef} className={inp} placeholder="Escreva do seu jeito…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} aria-label="Mensagem para o assistente" />
+          <div className="flex gap-2 items-end">
+            <textarea ref={inRef} rows={1} className={inp + ' h-auto min-h-[44px] max-h-40 py-2.5 resize-none overflow-y-auto leading-snug'} placeholder="Escreva do seu jeito…" title="Enter envia · Shift+Enter ou Shift+Tab quebra a linha" value={text}
+              onChange={(e) => { setText(e.target.value); fitTa(e.target); }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === 'Tab') && e.shiftKey) { e.preventDefault(); const el = e.target; let ok = false; try { ok = document.execCommand('insertText', false, '\n'); } catch (er) {} if (!ok) { el.setRangeText('\n', el.selectionStart, el.selectionEnd, 'end'); setText(el.value); } fitTa(el); return; }
+                if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); send(text); }
+              }} aria-label="Mensagem para o assistente" />
             <VoiceButton onText={(t) => send(t)} />
             <button className="w-11 h-11 shrink-0 rounded-xl btn-primary text-zinc-950 grid place-items-center disabled:opacity-40" aria-label="Enviar" disabled={!text.trim() || busy} onClick={() => send(text)}><Ic n="ArrowUp" /></button>
           </div>
@@ -4218,11 +4305,11 @@ function Onboarding({ onDone, onExample, onCloud }) {
   if (step === 2) body = (
     <div className="space-y-5"><Q t="O que tem hora marcada na sua semana?" d="Só o que não se mexe. Ative o que existe e preencha o básico." />
       {toggleRow(a.work.on, () => setIn('work', { on: !a.work.on }), 'Trabalho / estágio', 'Dias, horário e trajeto', <>
-        <input className={inp + ' h-10 max-w-sm'} value={a.work.title} onChange={(e) => setIn('work', { title: e.target.value })} aria-label="Nome do trabalho" />
+        <label className="block max-w-sm"><span className="text-xs text-zinc-500">Nome</span><input type="text" autoComplete="off" maxLength={60} className={inp + ' h-10 mt-1'} value={a.work.title} placeholder="Ex.: Estágio, Trabalho, Freela" onChange={(e) => setIn('work', { title: e.target.value })} aria-label="Nome do trabalho" /></label>
         <DayChips days={a.work.days} onChange={(d) => setIn('work', { days: d })} />{timePair(a.work, 'work')}
         {tripPick(a.work, (p) => setIn('work', p), 'É remoto')}
       </>)}
-      {toggleRow(a.aula.on, () => setIn('aula', { on: !a.aula.on }), 'Aulas / faculdade', 'Dias, horário e trajeto (ou importe o .ics depois)', <><DayChips days={a.aula.days} onChange={(d) => setIn('aula', { days: d })} />{timePair(a.aula, 'aula')}{tripPick(a.aula, (p) => setIn('aula', p), 'É online')}</>)}
+      {toggleRow(a.aula.on, () => setIn('aula', { on: !a.aula.on }), 'Aulas / faculdade', 'Dias, horário e trajeto (ou importe o .ics depois)', <><label className="block max-w-sm"><span className="text-xs text-zinc-500">Nome</span><input type="text" autoComplete="off" maxLength={60} className={inp + ' h-10 mt-1'} value={a.aula.title} placeholder="Ex.: Faculdade, Curso técnico, Pós" onChange={(e) => setIn('aula', { title: e.target.value })} aria-label="Nome das aulas" /></label><DayChips days={a.aula.days} onChange={(d) => setIn('aula', { days: d })} />{timePair(a.aula, 'aula')}{tripPick(a.aula, (p) => setIn('aula', p), 'É online')}</>)}
       {a.outros.map((o, i) => <div key={i} className="rounded-2xl border border-[#9f8fff]/45 bg-[#9f8fff]/[0.06] p-4 space-y-3 rise">
         <div className="flex gap-2"><input className={inp + ' h-10'} placeholder="Ex.: terapia, academia, curso" value={o.title} onChange={(e) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })} aria-label="Nome do compromisso" /><button className="w-10 h-10 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Remover" onClick={() => set({ outros: a.outros.filter((_, j) => j !== i) })}><Ic n="X" /></button></div>
         <DayChips days={o.days} onChange={(d) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, days: d } : x)) })} />

@@ -8,7 +8,7 @@
     "build": "node scripts/build.mjs",
     "icons": "node scripts/icons.cjs",
     "serve": "python3 -m http.server 8000 -d dist",
-    "test": "node tests/imports.cjs noid && node tests/review.cjs && node tests/account.cjs && node tests/t24.cjs && node tests/t25.cjs"
+    "test": "node tests/r3.cjs && node tests/imports.cjs noid && node tests/review.cjs && node tests/account.cjs && node tests/t24.cjs && node tests/t25.cjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
