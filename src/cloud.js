@@ -100,11 +100,18 @@ export const Cloud = {
     try { await Cloud.disablePush(); } catch (e) {}
     const r = await api('/functions/v1/qd-delete-account', { method: 'POST', body: JSON.stringify({ confirm: 'EXCLUIR' }) });
     clearTimeout(pushT); pushT = null; pending = null;
-    saveSession(null); ls.set(SEEN_AT, null); ls.set(LOCAL_AT, null); setStatus({ sync: 'idle', at: null, aiReady: null });
+    saveSession(null); setStatus({ sync: 'idle', at: null, aiReady: null }); Cloud.wipeLocal();
     return r;
   },
   // Sai da conta sem perder nada: sobe o que falta antes.
-  async logout(state) { if (state) { try { await Cloud.pushNow(state); } catch (e) {} } await Cloud.signOut(); ls.set(LOCAL_AT, null); },
+  async logout(state) { if (state) { try { await Cloud.pushNow(state); } catch (e) {} } await Cloud.signOut(); Cloud.wipeLocal(); },
+  // Limpa tudo deste aparelho: sessão, dados do app, histórico de avisos, token do Google (só em memória) e sessionStorage.
+  wipeLocal() {
+    clearTimeout(pushT); clearTimeout(remT); pushT = null; pending = null; lastRem = ''; gTok = null; session = null;
+    try { Object.keys(localStorage).filter((k) => k.startsWith('qd-') || k === 'superplanner-v4').forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+    try { sessionStorage.clear(); } catch (e) {}
+    emit();
+  },
 
   // ---------- sincronização ----------
   markLocal() { ls.set(LOCAL_AT, String(Date.now())); },
@@ -229,16 +236,27 @@ function loadGis() {
 function b64u(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
 
 // ---------- app instalável ----------
-let installEvt = null;
+let installEvt = null, waitingSW = null; const updFns = new Set();
 export const Pwa = {
   get canInstall() { return !!installEvt; },
   get installed() { return typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true); },
   get ios() { return typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent); },
   async install() { if (!installEvt) return false; installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; emit(); return r.outcome === 'accepted'; },
+  // Nova versão do app: o service worker novo fica esperando até a pessoa tocar em "Atualizar".
+  onUpdate(fn) { updFns.add(fn); if (waitingSW) fn(); return () => updFns.delete(fn); },
+  applyUpdate() { if (waitingSW) waitingSW.postMessage({ type: 'SKIP_WAITING' }); else location.reload(); },
   register() {
     if (!canCloud() || !('serviceWorker' in navigator)) return;
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; emit(); });
     window.addEventListener('appinstalled', () => { installEvt = null; emit(); });
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloading) { reloading = true; location.reload(); } });
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      const ready = (w) => { if (w && navigator.serviceWorker.controller) { waitingSW = w; updFns.forEach((f) => f()); } };
+      if (reg.waiting) ready(reg.waiting);
+      reg.addEventListener('updatefound', () => { const w = reg.installing; if (w) w.addEventListener('statechange', () => { if (w.state === 'installed') ready(w); }); });
+      setInterval(() => reg.update().catch(() => {}), 30 * 60000);
+    }).catch(() => {});
   },
 };

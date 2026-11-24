@@ -8,7 +8,7 @@ Planner adaptativo e babá eletrônica para TDAH e autismo. Monta a semana sozin
 - **Lume**: assistente que entende comandos em português e, com IA, mexe no app por você.
 - **Conta e aparelhos**: login com e-mail/senha ou Google, dados sincronizados na nuvem, versões anteriores.
 - **App instalável (PWA)**: ícone na tela inicial, funciona offline.
-- **Lembretes com o app fechado**: notificações push 10 min antes de blocos e compromissos, e na hora dos remédios e refeições.
+- **Notificações**: avisos no app (com Começar agora / Adiar 10 min / Feito e sino com o histórico do dia) e no aparelho; categorias (blocos com antecedência, cuidados, hora de desacelerar), som suave e silêncio no horário de sono. Com conta, também chegam com o app fechado (push).
 - **Google Agenda e .ics**: importa os compromissos dos próximos 14 dias da Google Agenda (OAuth, só leitura) ou de um arquivo .ics (Google, Outlook, Apple, portal da faculdade), com recorrências semanais.
 
 ## Estrutura
@@ -48,3 +48,12 @@ Usa o mesmo projeto do Fluxo Previsto, com tabelas próprias (`qd_*`) e RLS: cad
 2. **Authentication → Providers → Google**: ligar com o Client ID e o Client Secret de um cliente OAuth do Google Cloud (tipo "Aplicativo da Web", URI de redirecionamento `https://ziycnzsjhnswwrpotasp.supabase.co/auth/v1/callback`).
 3. **Google Agenda**: no Google Cloud, ativar a *Google Calendar API*; criar um cliente OAuth "Aplicativo da Web" com origens JavaScript `https://jullross.github.io` e `http://localhost:8000`; na tela de consentimento, adicionar o escopo `calendar.readonly` e o seu e-mail como usuário de teste. O Client ID vai em `GOOGLE_CLIENT_ID` (arquivo `.env` local, e em Settings → Secrets and variables → Actions → **Variables** no GitHub).
 4. **Edge Functions → Secrets**: `GEMINI_API_KEY` (já existe, compartilhada com o Fluxo Previsto).
+
+## Segurança
+
+- Nenhum segredo no front-end: só a chave publicável do Supabase e o `GOOGLE_CLIENT_ID` (públicos por natureza). Chaves de IA, VAPID e do cron ficam em segredos do Supabase / Vault.
+- RLS ligado em todas as tabelas `qd_*`; funções sensíveis só para `service_role`.
+- Google Agenda com escopo `calendar.readonly`; o token fica só na memória da aba.
+- Sair e Excluir conta limpam sessão, dados locais e histórico de avisos deste aparelho.
+- Content-Security-Policy restringe scripts e conexões aos domínios usados; `.ics` é validado (tamanho, tipo e formato) antes do parse; nenhum `innerHTML` com dados externos.
+- O service worker só guarda arquivos do próprio site (nunca respostas com login nem APIs externas).

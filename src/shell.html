@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="pt-BR"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://ziycnzsjhnswwrpotasp.supabase.co https://www.googleapis.com https://api.anthropic.com https://accounts.google.com; frame-src https://accounts.google.com; worker-src 'self'; manifest-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"><meta name="referrer" content="strict-origin-when-cross-origin"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>QuestDay · planner</title>
-<meta name="theme-color" content="#0c0c0f"><meta name="description" content="Planner adaptativo e babá eletrônica para TDAH e autismo.">
+<meta name="theme-color" content="#0b0c0f"><meta name="description" content="Planner adaptativo e babá eletrônica para TDAH e autismo.">
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="QuestDay">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
    TYPE   Inter, four sizes
    LAYOUT bottom nav on phone, side rail on desktop */
 %%CSS%%
-:root{color-scheme:dark} html,body{margin:0;background:#0b0c0f} .light,.light body{background:#f7f7fa} @layer base{*{min-width:0}}
+:root{color-scheme:dark} html,body{margin:0;background:#0b0c0f} .light,.light body{background:#f7f7fa} @layer base{*{min-width:0}} body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)} @media (min-width:768px){main[style]{padding-bottom:3rem!important}}
 body{font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
 input[type=time]::-webkit-calendar-picker-indicator,input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.75)}
 .trip-stripes{background:repeating-linear-gradient(135deg,rgba(159,143,255,.10) 0 6px,rgba(159,143,255,.04) 6px 12px)}

@@ -51,6 +51,7 @@ const SB = 'https://ziycnzsjhnswwrpotasp.supabase.co';
   await p.screenshot({ path: '/tmp/acct_modal.png' });
   await p.getByRole('button', { name: /Sair da conta/ }).first().click(); await p.waitForTimeout(800);
   t = await p.locator('body').innerText(); console.log('logout -> home', /Crie sua conta/.test(t), /Você saiu da conta/.test(t));
+  console.log('local keys after logout', JSON.stringify(await p.evaluate(() => Object.keys(localStorage))));
   await p.getByRole('tab', { name: 'Entrar' }).click(); await p.getByLabel('E-mail').fill('jullia@teste.com'); await p.getByLabel('Senha').fill('segredo123'); await p.getByRole('button', { name: /^Entrar$/ }).click(); await p.waitForTimeout(1500);
   await p.locator('nav button:has-text("Conta")').last().click(); await p.waitForTimeout(300);
   await p.getByRole('button', { name: /Excluir minha conta/ }).click(); await p.waitForTimeout(200);

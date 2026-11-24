@@ -777,7 +777,7 @@ const itemTitle = (s, it) => { const r = refOf(s, it); return r ? r.title : '(re
 const itemDesc = (s, it) => { const r = refOf(s, it); if (!r) return ''; return it.kind === 'task' && it.ver === 'min' ? r.minText : it.kind === 'task' ? `${r.dur} min, versão completa` : `ciclo a cada ${r.every} ${r.every === 1 ? 'dia' : 'dias'}`; };
 
 /* ===================== topo ===================== */
-function TopBar({ s, en, setTab, act }) {
+function TopBar({ s, en, setTab, act, bell }) {
   const so = socialOf(s);
   const st = s.streak, alive = st.keptDay >= s.day - 1;
   return (
@@ -795,6 +795,7 @@ function TopBar({ s, en, setTab, act }) {
           <span className="text-xs text-zinc-500 tabular-nums">social {so.now}%</span>
         </div>
       </div>
+      {bell}
       <button onClick={act.openAccount} aria-label="Conta" title="Conta" className="md:hidden w-9 h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 text-sm font-medium">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-4 h-4" />}</button>
       <button onClick={() => act.setUi({ lowStim: !s.ui.lowStim })} aria-pressed={s.ui.lowStim} title="Modo baixo estímulo" aria-label="Modo baixo estímulo" className={`w-9 h-9 grid place-items-center rounded-full press ${s.ui.lowStim ? 'bg-[#9f8fff]/20 text-[#cdc4ff]' : 'bg-white/[0.05] text-zinc-400 hover:bg-white/[0.08]'}`}><Ic n="EyeOff" /></button>
       <button onClick={() => setTab('agora')} className="flex items-center gap-1.5 px-3 h-9 rounded-full bg-white/[0.05] text-sm text-zinc-300 hover:bg-white/[0.08]" title={`Melhor marca: ${st.best} dias`}>
@@ -1357,6 +1358,17 @@ function parseIcs(txt) {
     else if (N === 'RECURRENCE-ID') cur.recurrenceId = true;
   }
   return evs;
+}
+// Validação antes do parse: tamanho, extensão/tipo e cabeçalho de iCalendar.
+const ICS_MAX = 2 * 1024 * 1024;
+async function readIcsFile(fl) {
+  if (!fl) throw new Error('Nenhum arquivo escolhido.');
+  if (fl.size > ICS_MAX) throw new Error('Arquivo grande demais (máx. 2 MB). Exporte só o calendário que você quer.');
+  if (!/\.ics$/i.test(fl.name || '') && !/text\/calendar/i.test(fl.type || '')) throw new Error('Esse arquivo não é um .ics de calendário.');
+  const txt = (await fl.text()).replace(/^\uFEFF/, '');
+  if (!/^\s*BEGIN:VCALENDAR/i.test(txt) || !/END:VCALENDAR\s*$/i.test(txt)) throw new Error('O arquivo não parece um calendário .ics válido.');
+  if ((txt.match(/BEGIN:VEVENT/g) || []).length > 5000) throw new Error('Esse calendário tem eventos demais para importar de uma vez.');
+  return txt;
 }
 const dayOfDate = (d) => Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / DAYMS);
 const minOfDate = (d) => d.getHours() * 60 + d.getMinutes();
@@ -2605,18 +2617,41 @@ const SECOES = [
   { id: 'conforto', t: 'Conforto e backup', d: 'Baixo estímulo, tema, fonte, exportar', icon: 'EyeOff', n: () => null },
   { id: 'conta', t: 'Conta e aparelhos', d: 'Login, sincronizar, celular, lembretes, Google Agenda', icon: 'Users', n: () => null },
 ];
+/* ===================== notificações: plano do dia (usado no app e no push do servidor) ===================== */
+const NOTIF0 = { blocks: true, lead: 10, care: true, sleep: true, sound: true, quiet: true };
+const notifCfg = (s) => ({ ...NOTIF0, ...(s.notif || {}) });
+// Em silêncio entre a hora de dormir e a de acordar (o aviso de desacelerar vem antes).
+function inSleep(s, m) { const b = toMin(s.sleepGoal.bed), w = toMin(s.sleepGoal.wake); return b > w ? m >= b || m < w : m >= b && m < w; }
+function notifPlan(s, day, opts = {}) {
+  const c = notifCfg(s), low = !!(s.ui && s.ui.lowStim), out = [], vac = vacationOn(s, day);
+  const lead = c.lead, when = (t) => (lead ? `Em ${lead} min: ${t}` : `Agora: ${t}`);
+  if (c.blocks) {
+    s.plan.items.filter((it) => it.day === day && it.status === 'pendente' && it.start != null && refOf(s, it) && !areaOf(s, it)).forEach((it) => out.push({ id: `it-${it.id}`, at: it.start - lead, title: when(itemTitle(s, it)), body: low ? '' : 'Hora de ir fechando o que está fazendo.', kind: 'bloco' }));
+    fixedOn(s, day).filter((f) => !(f.log && f.log.st === 'nao')).forEach((f) => out.push({ id: `fx-${day}-${f.id}`, at: f.s - lead, title: when(f.title), body: low ? '' : f.type === 'trajeto' ? 'Hora de se arrumar para sair.' : 'Hora de ir fechando o que está fazendo.', kind: 'bloco' }));
+  }
+  if (c.care && !(vac && !vac.keepCare)) {
+    const taken = (s.medsTaken || {})[day] || {}; (s.careCfg.meds || []).filter((m) => m.name && !taken[m.id]).forEach((m) => out.push({ id: `med-${day}-${m.id}`, at: toMin(m.time), title: `Hora do remédio: ${m.name}`, body: low ? '' : 'Marque quando tomar.', kind: 'cuidado' }));
+    const ate = (s.mealsDone || {})[day] || {}; (s.careCfg.meals || []).filter((m) => m.on !== false && !ate[m.id]).forEach((m) => out.push({ id: `meal-${day}-${m.id}`, at: toMin(m.time), title: `Hora do ${String(m.name || 'refeição').toLowerCase()}`, body: low ? '' : 'Comer também é cuidar de você.', kind: 'cuidado' }));
+    if (opts.water && day === s.day && gMl(s) > 0) [630, 870, 1110].forEach((t) => { const wake = toMin(s.sleepGoal.wake), bed = nightMin(s.sleepGoal.bed), frac = Math.max(0, Math.min(1, (t - wake) / Math.max(60, bed - wake))); if (wMl(s) < gMl(s) * frac * 0.7) out.push({ id: `water-${day}-${t}`, at: t, title: 'Um copo de água?', body: low ? '' : `${fmtL(wMl(s))} de ${fmtL(gMl(s))} até agora.`, kind: 'cuidado' }); });
+  }
+  if (c.sleep) out.push({ id: `sleep-${day}`, at: ((toMin(s.sleepGoal.bed) - 30) + 1440) % 1440, title: 'Hora de desacelerar', body: low ? '' : `Daqui a 30 min é hora de dormir (${s.sleepGoal.bed}).`, kind: 'sono' });
+  return out.filter((n) => n.at >= 0 && n.at < 1440 && !(c.quiet && n.kind !== 'sono' && inSleep(s, n.at)));
+}
+const NKEY = 'qd-notif';
+const nLoad = (day) => { try { const v = JSON.parse(localStorage.getItem(NKEY)); if (v && v.day === day) return v; } catch (e) {} return { day, fired: [], hist: [], snooze: [] }; };
+const nSave = (v) => { try { localStorage.setItem(NKEY, JSON.stringify(v)); } catch (e) {} };
+// Ações rápidas a partir do id (o mesmo id é usado como "tag" no push do servidor).
+function notifRef(s, id) {
+  const m = String(id || '').replace(/:s\d+$/, '').match(/^(it|fx|med|meal|water|sleep)-(.+)$/); if (!m) return null;
+  if (m[1] === 'it') { const it = s.plan.items.find((y) => y.id === m[2]); return it ? { type: 'item', it } : null; }
+  const [d, ...rest] = m[2].split('-'); return { type: m[1], day: +d, id: rest.join('-') };
+}
+
 /* ===================== lembretes push (calculados aqui, enviados pelo servidor) ===================== */
 function remindersFor(s) {
   const out = [], min = Date.now() + 60000;
   const at = (day, m) => { const [y, mo, d] = isoOf(day).split('-').map(Number); return new Date(y, mo - 1, d, Math.floor(m / 60), m % 60).getTime(); };
-  for (const day of [s.day, s.day + 1, s.day + 2]) {
-    const vac = vacationOn(s, day);
-    s.plan.items.filter((it) => it.day === day && it.status === 'pendente' && it.start != null && refOf(s, it)).forEach((it) => out.push({ at: at(day, it.start - 10), title: `Em 10 min: ${itemTitle(s, it)}`, body: 'Hora de ir fechando o que está fazendo.', tag: `it-${it.id}` }));
-    fixedOn(s, day).filter((f) => !(f.log && f.log.st === 'nao')).forEach((f) => out.push({ at: at(day, f.s - 10), title: `Em 10 min: ${f.title}`, body: f.type === 'trajeto' ? 'Hora de se arrumar para sair.' : 'Hora de ir fechando o que está fazendo.', tag: `fx-${day}-${f.id}` }));
-    if (vac && !vac.keepCare) continue;
-    const taken = (s.medsTaken || {})[day] || {}; (s.careCfg.meds || []).filter((m) => m.name && !taken[m.id]).forEach((m) => out.push({ at: at(day, toMin(m.time)), title: `Hora do remédio: ${m.name}`, body: 'Marque no app quando tomar.', tag: `med-${day}-${m.id}` }));
-    const ate = (s.mealsDone || {})[day] || {}; (s.careCfg.meals || []).filter((m) => m.on !== false && !ate[m.id]).forEach((m) => out.push({ at: at(day, toMin(m.time)), title: `Hora do ${String(m.name || 'refeição').toLowerCase()}`, body: 'Comer também é cuidar de você.', tag: `meal-${day}-${m.id}` }));
-  }
+  for (const day of [s.day, s.day + 1, s.day + 2]) notifPlan(s, day).forEach((n) => out.push({ at: at(day, n.at), title: n.title, body: n.body, tag: n.id }));
   return out.filter((r) => r.at > min).sort((a, b) => a.at - b.at).slice(0, 120).map((r) => ({ ...r, at: new Date(r.at).toISOString() }));
 }
 
@@ -2678,9 +2713,9 @@ function ContaSection({ s, act }) {
       setG({ err: true, t: e.code === 'no_client_id' ? 'A integração com o Google ainda não foi configurada: falta o Client ID OAuth (GOOGLE_CLIENT_ID no .env do build).' : e.code === 'closed' || e.code === 'denied' ? 'A permissão do Google foi cancelada. Nada foi importado.' : e.code === 'api_disabled' ? 'O Google recusou: a Google Calendar API precisa estar ativada no projeto do Google Cloud.' : e.code === 'expired' ? 'A autorização expirou. Toque em importar de novo.' : e.code === 'offline' ? 'Não consegui falar com o Google agora. Confira a internet.' : 'Não consegui ler a agenda agora. Tente de novo.' });
     }
   };
-  const importF = async (fl) => { if (!fl) return; setF({ busy: true, t: `Lendo ${fl.name}…` }); try { const txt = await fl.text(); const r = act.importIcsFile(txt); const n = r.weekly + r.once;
+  const importF = async (fl) => { if (!fl) return; setF({ busy: true, t: 'Lendo o arquivo…' }); try { const txt = await readIcsFile(fl); const r = act.importIcsFile(txt); const n = r.weekly + r.once;
     setF({ ok: true, t: !r.total ? 'Não achei eventos nesse arquivo. Confira se é um .ics exportado do calendário.' : n ? `Importei ${[r.weekly ? `${r.weekly} horário${r.weekly > 1 ? 's' : ''} semana${r.weekly > 1 ? 'is' : 'l'}` : '', r.once ? `${r.once} compromisso${r.once > 1 ? 's' : ''} com data` : ''].filter(Boolean).join(' e ')}.${r.dupes ? ` ${r.dupes} já estava${r.dupes > 1 ? 'm' : ''} aqui.` : ''}${r.skipped.past ? ` ${r.skipped.past} já ${r.skipped.past > 1 ? 'passaram' : 'passou'}.` : ''}${r.skipped.allDay ? ` ${r.skipped.allDay} de dia inteiro ${r.skipped.allDay > 1 ? 'ficaram' : 'ficou'} de fora.` : ''}` : 'Nada novo: os eventos já estavam aqui, já passaram ou são de dia inteiro.' }); }
-    catch (e) { setF({ err: true, t: 'Não consegui ler esse arquivo.' }); } };
+    catch (e) { setF({ err: true, t: e && e.message && !/^[A-Z][a-z]+Error/.test(e.message) ? e.message : 'Não consegui ler esse arquivo.' }); } };
   const loadBk = async () => { try { setBk(await Cloud.backups()); } catch (e) { setBk([]); } };
   const row = (icon, title, sub, right) => <div className="flex items-center gap-3"><span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] text-zinc-300 shrink-0"><Ic n={icon} className="w-4 h-4" /></span><span className="flex-1 min-w-0"><span className="block text-sm text-zinc-100">{title}</span>{sub && <span className="block text-xs text-zinc-500">{sub}</span>}</span>{right}</div>;
   return (
@@ -2690,11 +2725,7 @@ function ContaSection({ s, act }) {
         {row('Download', 'App no celular', Pwa.installed ? 'Instalado. Abra pelo ícone na tela de início.' : Pwa.ios ? 'No Safari: toque em Compartilhar e depois em "Adicionar à Tela de Início".' : Pwa.canInstall ? 'Ganha ícone, abre em tela cheia e funciona offline.' : 'No Chrome do celular: menu ⋮ e "Instalar app".',
           Pwa.canInstall && !Pwa.installed ? <button className={btnP + ' min-h-[38px] h-9 text-sm'} onClick={() => Pwa.install()}>Instalar</button> : null)}
       </div>
-      <div className={card + ' p-5 space-y-3'}>
-        {row('Bell', 'Lembretes com o app fechado', u ? (pushTxt || 'Aviso 10 min antes de cada bloco e compromisso, e na hora dos remédios e refeições. Nas férias, só o que você manteve.') : 'Entre na conta para ligar.',
-          u && !pushTxt ? <button role="switch" aria-checked={Cloud.pushOn} aria-label="Lembretes com o app fechado" onClick={togglePush} className={`block w-11 h-6 rounded-full p-0.5 shrink-0 transition-colors ${Cloud.pushOn ? 'bg-[#2ee8c4]' : 'bg-white/10'}`}><span className={`block w-5 h-5 rounded-full bg-white transition-transform ${Cloud.pushOn ? 'translate-x-5' : ''}`} /></button> : null)}
-        {pmsg && <p className="text-xs text-zinc-300" role="status">{pmsg}</p>}
-      </div>
+      <NotifCard s={s} act={act} />
       <div className={card + ' p-5 space-y-3'}>
         {row('CalendarArrowUp', 'Google Agenda e calendários', 'Traz seus compromissos para a semana como blocos fixos. Só leitura: o QuestDay não muda nada no seu calendário.', null)}
         <div className="flex flex-wrap gap-2">
@@ -2793,6 +2824,51 @@ function Tour({ onEnd }) {
           <button className={btnP + ' min-h-[40px] h-10 text-sm'} autoFocus onClick={() => (last ? onEnd() : setI(i + 1))}>{last ? 'Começar' : 'Próximo'}<Ic n={last ? 'Check' : 'ArrowRight'} className="w-4 h-4" /></button></div>
       </div>
     </div>, document.body);
+}
+
+const permOf = () => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+function NotifCard({ s, act }) {
+  useCloud();
+  const c = notifCfg(s), [perm, setPerm] = useState(permOf), [msg, setMsg] = useState(null), u = Cloud.user;
+  const on = perm === 'granted' && s.notify, setC = (p) => act.setNotif(p);
+  const sw = (val, fn, label, sub) => <button type="button" role="switch" aria-checked={val} onClick={fn} className="w-full flex items-center justify-between gap-3 text-left py-2"><span><span className="block text-sm text-zinc-200">{label}</span>{sub && <span className="block text-xs text-zinc-500">{sub}</span>}</span><span className={`block w-10 h-6 rounded-full p-0.5 shrink-0 transition-colors ${val ? 'bg-[#2ee8c4]' : 'bg-white/10'}`}><span className={`block w-5 h-5 rounded-full bg-white transition-transform ${val ? 'translate-x-4' : ''}`} /></span></button>;
+  const ask = async () => { setMsg(null); if (perm === 'unsupported') return; const r = await Notification.requestPermission(); setPerm(r); act.setNotify(r === 'granted'); if (r === 'granted') setMsg('Pronto. Os avisos chegam como notificação do aparelho quando o app não estiver na tela.'); };
+  const pushToggle = async () => { setMsg(null); try { if (Cloud.pushOn) { await Cloud.disablePush(); setMsg('Avisos com o app fechado desligados neste aparelho.'); } else { await Cloud.enablePush(); setPerm(permOf()); act.setNotify(true); Cloud.setReminders(remindersFor(s)); setMsg('Pronto. Os avisos chegam mesmo com o app fechado.'); } } catch (e) { setPerm(permOf()); setMsg(e.message === 'denied' ? 'O aparelho não deu permissão para notificações.' : e.message === 'unsupported' ? 'Este navegador não recebe avisos com o app fechado.' : 'Não consegui ligar agora. Tente de novo.'); } };
+  const st = perm === 'unsupported' ? ['Indisponível', 'text-zinc-500', 'Este navegador não mostra notificações. Os avisos aparecem dentro do app.'] : perm === 'denied' ? ['Bloqueadas no navegador', 'text-[#ff8da1]', 'Para liberar: toque no cadeado ao lado do endereço (no celular, em Configurações do app) → Notificações → Permitir. Depois volte aqui.'] : on ? ['Ativadas', 'text-[#7ff0d8]', null] : ['Desativadas', 'text-zinc-400', 'Os avisos aparecem só dentro do app.'];
+  return (
+    <div className={card + ' p-5 space-y-3'}>
+      <div className="flex items-start gap-3"><span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] text-zinc-300 shrink-0"><Ic n="Bell" className="w-4 h-4" /></span>
+        <span className="flex-1 min-w-0"><span className="block text-sm text-zinc-100">Notificações</span><span className={`block text-xs ${st[1]}`} role="status">{st[0]}</span></span>
+        {perm === 'default' || (perm === 'granted' && !s.notify) ? <button className={btnP + ' min-h-[36px] h-9 text-sm'} onClick={perm === 'granted' ? () => act.setNotify(true) : ask}>Ativar</button> : on ? <button className={btnL} onClick={() => act.setNotify(false)}>Desativar</button> : null}</div>
+      {st[2] && <p className="text-xs text-zinc-500">{st[2]}</p>}
+      <div className="flex flex-wrap gap-2"><button className={btnG + ' min-h-[36px] h-9 text-sm'} onClick={() => act.testNotif()}><Ic n="Bell" className="w-3.5 h-3.5" />Enviar notificação de teste</button></div>
+      <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
+        <div>{sw(c.blocks, () => setC({ blocks: !c.blocks }), 'Blocos e compromissos', 'Antes de cada tarefa, aula, trabalho ou trajeto.')}
+          {c.blocks && <div className="pb-2"><Seg value={String(c.lead)} onChange={(v) => setC({ lead: +v })} options={[['0', 'Na hora'], ['5', '5 min'], ['10', '10 min'], ['15', '15 min']]} label="Antecedência" /></div>}</div>
+        {sw(c.care, () => setC({ care: !c.care }), 'Cuidados', 'Água, refeições e remédios cadastrados.')}
+        {sw(c.sleep, () => setC({ sleep: !c.sleep }), 'Hora de desacelerar', `Aviso suave 30 min antes de dormir (${s.sleepGoal.bed}).`)}
+        {sw(c.sound, () => setC({ sound: !c.sound }), 'Som suave', s.ui && s.ui.lowStim ? 'No baixo estímulo o som fica desligado.' : null)}
+        {sw(c.quiet, () => setC({ quiet: !c.quiet }), 'Silêncio no horário de sono', `Nada entre ${s.sleepGoal.bed} e ${s.sleepGoal.wake}.`)}
+        {canCloud() && <div className="pt-1">{u ? (Cloud.pushSupported() ? sw(Cloud.pushOn, pushToggle, 'Também com o app fechado', 'Pelo servidor, mesmo sem abrir o QuestDay. No iPhone, só com o app instalado.') : <p className="text-xs text-zinc-500 py-2">{Pwa.ios && !Pwa.installed ? 'No iPhone, os avisos com o app fechado funcionam depois de instalar o app na tela de início.' : 'Este navegador não recebe avisos com o app fechado.'}</p>) : <p className="text-xs text-zinc-500 py-2">Entre na conta para receber avisos também com o app fechado.</p>}</div>}
+      </div>
+      {msg && <p className="text-xs text-zinc-300" role="status">{msg}</p>}
+    </div>);
+}
+// Sino no topo: histórico de avisos do dia.
+function Bell({ hist, onOpen }) {
+  const P = usePopover(300, 360), unread = hist.filter((h) => !h.read).length;
+  useEffect(() => { if (P.open) onOpen(); }, [P.open]);
+  return (
+    <div className="relative" ref={P.ref}>
+      <button ref={P.btnRef} onClick={() => P.setOpen(!P.open)} aria-label={`Avisos de hoje${unread ? `, ${unread} novo${unread > 1 ? 's' : ''}` : ''}`} aria-haspopup="dialog" aria-expanded={P.open} className="relative w-9 h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 hover:bg-white/[0.08]">
+        <Ic n="Bell" className="w-4 h-4" />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#ff6fb5] text-[10px] font-semibold text-zinc-950 grid place-items-center tabular-nums">{unread > 9 ? '9+' : unread}</span>}</button>
+      {P.open && P.pos && ReactDOM.createPortal(
+        <div ref={P.popRef} role="dialog" aria-label="Avisos de hoje" style={{ position: 'fixed', ...P.pos, left: Math.max(8, Math.min(P.pos.left, window.innerWidth - 308)) }} className="z-[90] w-[300px] max-h-[360px] overflow-y-auto pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+          <p className="px-2 pt-1 pb-2 text-xs uppercase tracking-wide text-zinc-500">Avisos de hoje</p>
+          {hist.length ? <ul className="space-y-1">{[...hist].reverse().map((h, i) => <li key={h.id + i} className="rounded-lg px-2.5 py-2 hover:bg-white/[0.04]"><p className="text-sm text-zinc-100 flex items-baseline gap-2"><span className="text-[11px] text-zinc-500 tabular-nums shrink-0">{h.time}</span><span className="min-w-0">{h.title}</span></p>{h.body && <p className="text-xs text-zinc-500 pl-11">{h.body}</p>}</li>)}</ul>
+            : <p className="px-2 pb-2 text-sm text-zinc-500">Nenhum aviso ainda hoje.</p>}
+        </div>, document.body)}
+    </div>);
 }
 
 /* ===================== MINHA ROTINA: visão geral ===================== */
@@ -2941,7 +3017,7 @@ function Cadastro({ s, up, act, sec: sec0, setSec, goTab }) {
           {!(s.exams || []).length && !(s.projects || []).length && !String(open).startsWith('new') && <p className="px-4 py-6 text-sm text-zinc-500">Nenhuma prova ou meta ainda.</p>}
         </div>
       </>}
-      {sec === 'fixos' && <label className={btnG + ' cursor-pointer w-fit'}><Ic n="Upload" />Importar aulas ou horários (.ics)<input type="file" accept=".ics,text/calendar" className="sr-only" onChange={(e) => { const fl = e.target.files[0]; if (fl) fl.text().then(act.importIcs); e.target.value = ''; }} /></label>}
+      {sec === 'fixos' && <label className={btnG + ' cursor-pointer w-fit'}><Ic n="Upload" />Importar aulas ou horários (.ics)<input type="file" accept=".ics,text/calendar" className="sr-only" onChange={(e) => { const fl = e.target.files[0]; if (fl) readIcsFile(fl).then(act.importIcs, (er) => act.toast(er.message)); e.target.value = ''; }} /></label>}
       {sec === 'fixos' && (
         <div className={list}>
           {newForm(FixedForm, 'fixed')}
@@ -3710,7 +3786,10 @@ function App({ initialTab, onRestart }) {
   const [comp, setComp] = useState(null);
   const [, setTick] = useState(0);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 15000); return () => clearInterval(id); }, []);
-  const reminded = useRef({});
+  const [nst, setNst] = useState(() => nLoad(realToday())), [ntoast, setNtoast] = useState(null);
+  useCloud();
+  const [upd, setUpd] = useState(false);
+  useEffect(() => Pwa.onUpdate(() => setUpd(true)), []);
   const [msgs, setMsgs] = useState(() => { const s0 = load(); const e0 = energyOf(s0); return [{ id: 'hi', role: 'bot', text: `Oi, eu sou o Lume. Energia em ${e0.total}% hoje. Posso **adicionar coisas na sua rotina**, sugerir **o que fazer agora** ou **aliviar o seu dia**. É só escrever do seu jeito.`, cards: [] }]; });
   const [tm, setTm] = useState(null);
   const up = (fn) => setS((x) => fn(x));
@@ -3719,7 +3798,7 @@ function App({ initialTab, onRestart }) {
   LUME_LV = lumeLevel(s).lv;
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} Cloud.markLocal(); Cloud.queuePush(s); }, [s]);
   useCloud();
-  useEffect(() => { if (Cloud.user && Cloud.pushOn && s.day === realToday()) Cloud.setReminders(remindersFor(s)); }, [s.plan, s.medsTaken, s.mealsDone, s.careCfg, s.fixed, s.fixedLog, s.vacations, s.day, Cloud.pushOn, Cloud.user && Cloud.user.id]);
+  useEffect(() => { if (Cloud.user && Cloud.pushOn && s.day === realToday()) Cloud.setReminders(remindersFor(s)); }, [s.plan, s.medsTaken, s.mealsDone, s.careCfg, s.fixed, s.fixedLog, s.vacations, s.day, s.notif, s.sleepGoal, s.ui && s.ui.lowStim, Cloud.pushOn, Cloud.user && Cloud.user.id]);
   useEffect(() => { if (Cloud.user) Cloud.lumeCheck(); }, [Cloud.user && Cloud.user.id]);
   useEffect(() => {
     const vis = async () => { if (document.visibilityState === 'visible') { const d = await Cloud.newerRemote(); if (d && d.v === 4) { setS(fromSaved(d)); setToast({ m: 'Atualizei com o que você fez no outro aparelho.', id: Date.now() }); } } else Cloud.flush(); };
@@ -3730,6 +3809,7 @@ function App({ initialTab, onRestart }) {
   }, []);
   useEffect(() => { const r = document.documentElement, ui = s.ui || {}; r.classList.toggle('low-stim', !!ui.lowStim); r.classList.toggle('light', ui.theme === 'light'); r.classList.toggle('font-legivel', ui.font === 'legivel'); r.classList.toggle('text-grande', ui.size === 'grande'); }, [s.ui]);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 3000); return () => clearTimeout(id); }, [toast]);
+  useEffect(() => { const ui = s.ui || {}, c = ui.theme === 'light' ? (ui.lowStim ? '#f4f1ea' : '#f7f7fa') : '#0b0c0f'; document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', c)); }, [s.ui && s.ui.theme, s.ui && s.ui.lowStim]);
   const running = !!(tm && tm.running);
   useEffect(() => {
     if (!running) return;
@@ -4039,9 +4119,10 @@ function App({ initialTab, onRestart }) {
     setCare: (p) => up((x) => ({ ...x, careCfg: { ...x.careCfg, ...p } })),
     setCycle: (p) => up((x) => ({ ...x, cycleCfg: { ...x.cycleCfg, ...p } })),
     exitDemo: () => { setAcctOpen(false); try { localStorage.removeItem(KEY); localStorage.removeItem('qd-local-at'); } catch (e) {} onRestart && onRestart(); },
-    logout: async () => { setAcctOpen(false); await Cloud.logout(sRef.current); try { localStorage.removeItem(KEY); sessionStorage.setItem('qd-msg', 'Você saiu da conta. Seus dados continuam salvos nela.'); } catch (e) {} onRestart && onRestart(); },
-    deleteAccount: async () => { const r = await Cloud.deleteAccount(); setAcctOpen(false); try { localStorage.removeItem(KEY); sessionStorage.setItem('qd-msg', r && r.login_deleted ? 'Conta excluída. Todos os seus dados foram apagados.' : 'Dados do QuestDay apagados. O login continua existindo porque também é usado no Fluxo Previsto.'); } catch (e) {} onRestart && onRestart(); },
+    logout: async () => { setAcctOpen(false); await Cloud.logout(sRef.current); try { if ('serviceWorker' in navigator) { const reg = await navigator.serviceWorker.getRegistration(); if (reg) (await reg.getNotifications()).forEach((n) => n.close()); } } catch (e) {} try { sessionStorage.setItem('qd-msg', 'Você saiu da conta. Seus dados continuam salvos nela e foram apagados deste aparelho.'); } catch (e) {} onRestart && onRestart(); },
+    deleteAccount: async () => { const r = await Cloud.deleteAccount(); setAcctOpen(false); try { sessionStorage.setItem('qd-msg', r && r.login_deleted ? 'Conta excluída. Todos os seus dados foram apagados.' : 'Dados do QuestDay apagados. O login continua existindo porque também é usado no Fluxo Previsto.'); } catch (e) {} onRestart && onRestart(); },
     openAccount: () => setAcctOpen(true),
+    toast: (m) => notify(m),
     loadRemote: (d, msg) => { if (!d || d.v !== 4) return; setTm(null); setS(fromSaved(d)); notify(msg || 'Trouxe seus dados da nuvem.'); },
     cloudLogin: async () => { const demo = !!sRef.current.demo; const r = await Cloud.reconcile(demo ? null : sRef.current); if (demo && !(r.use === 'remote' && r.data && r.data.v === 4)) { setAcctOpen(false); try { localStorage.removeItem(KEY); } catch (e) {} onRestart && onRestart(); return; } if (r.use === 'remote' && r.data && r.data.v === 4) { setTm(null); setS(fromSaved(r.data)); notify('Pronto: trouxe seus dados da nuvem.'); } else notify('Conta conectada. Seus dados agora ficam salvos na nuvem.'); },
     importDated: (evs, why) => {
@@ -4063,11 +4144,26 @@ function App({ initialTab, onRestart }) {
       return { weekly: weekly.length, once, dupes: r.weekly.length - weekly.length + (r.once.length - once), skipped: r.skipped, total: r.total };
     },
     importGcal: (evs) => act.importDated(evs.map((e) => ({ id: e.id, title: e.title, day: dayOfDate(e.start), start: minOfDate(e.start), end: e.end - e.start >= DAYMS || minOfDate(e.end) <= minOfDate(e.start) ? Math.min(1439, minOfDate(e.start) + 60) : minOfDate(e.end) })), 'Compromisso da sua Google Agenda: fica fixo aqui.'),
+    setNotif: (p) => up((x) => ({ ...x, notif: { ...notifCfg(x), ...p } })),
+    setNotify: (v) => up((x) => ({ ...x, notify: !!v })),
+    testNotif: () => fireNotif({ id: `teste-${Date.now()}`, title: 'Teste do QuestDay', body: 'Assim chegam os seus avisos. Pode ficar tranquila.', kind: 'teste' }, true),
+    notifAction: (id, action) => {
+      const x = sRef.current, r = notifRef(x, id); setNtoast(null);
+      if (action === 'snooze') { setNst((v) => { const n = { ...v, snooze: [...v.snooze.filter((z) => z.id !== id), { id: String(id).replace(/:s\d+$/, ''), until: Date.now() + 10 * 60000, k: (v.snooze.filter((z) => z.id === id).length || 0) + 1 }] }; nSave(n); return n; }); notify('Combinado: aviso de novo em 10 min.'); return; }
+      if (!r) return;
+      if (action === 'start' && r.type === 'item') { act.markStart(r.it); setTab('agora'); return; }
+      if (action === 'done') {
+        if (r.type === 'item' && r.it.status === 'pendente') act.done(r.it);
+        else if (r.type === 'med' && r.day === x.day && !(x.medsTaken[x.day] || {})[r.id]) act.med(r.id);
+        else if (r.type === 'meal' && r.day === x.day && !(x.mealsDone[x.day] || {})[r.id]) act.meal(r.id);
+        else if (r.type === 'water') act.water(250);
+      }
+    },
     askNotify: async () => {
-      if (canCloud() && Cloud.user && Cloud.pushSupported()) { try { await Cloud.enablePush(); up((x) => ({ ...x, notify: true })); notify('Lembretes ligados, mesmo com o app fechado.'); } catch (e) { notify(e.message === 'denied' ? 'O aparelho não deu permissão para notificações.' : 'Não consegui ligar agora.'); } return; }
-      if (canCloud() && !Cloud.user) notify('Para receber com o app fechado, entre na conta em Minha Rotina → Conta e aparelhos.');
-      try { if (!('Notification' in window)) throw new Error('x'); const r = await Notification.requestPermission(); up((x) => ({ ...x, notify: r === 'granted' })); notify(r === 'granted' ? 'Notificações ativadas.' : 'O navegador não permitiu. Os avisos aparecem dentro do app.'); }
-      catch (e) { notify('Aqui na prévia o navegador bloqueia notificações. Os avisos aparecem dentro do app.'); }
+      if (typeof Notification === 'undefined') { notify('Este navegador não mostra notificações. Os avisos aparecem dentro do app.'); return; }
+      const r = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      up((x) => ({ ...x, notify: r === 'granted' }));
+      notify(r === 'granted' ? 'Notificações ativadas.' : r === 'denied' ? 'Estão bloqueadas no navegador. Libere no cadeado ao lado do endereço.' : 'Tudo bem, os avisos aparecem dentro do app.');
     },
     importIcs: (txt) => { const r = act.importIcsFile(txt); const n = r.weekly + r.once; notify(n ? `Importei ${r.weekly ? `${r.weekly} horário${r.weekly > 1 ? 's' : ''} semana${r.weekly > 1 ? 'is' : 'l'}` : ''}${r.weekly && r.once ? ' e ' : ''}${r.once ? `${r.once} compromisso${r.once > 1 ? 's' : ''} com data` : ''}.` : r.total ? 'Nada novo nesse arquivo: os eventos já estavam aqui, já passaram ou são de dia inteiro.' : 'Não achei eventos nesse arquivo.'); },
     nextDay: () => { setTm(null); up((x) => rollover({ ...x, offset: (x.offset || 0) + 1 })); notify('Novo dia. Comece pelo check-in.'); setTab('agora'); },
@@ -4075,17 +4171,38 @@ function App({ initialTab, onRestart }) {
     restartOnb: () => onRestart && onRestart(),
     cleanStart: () => { setS((x) => cleanSample(x)); notify('Pronto: sem dados de exemplo. O Lume aprende só com você a partir de agora.'); },
   };
+  // Dispara um aviso: histórico do dia, toast com ações no app e, se permitido e o app não estiver na tela, notificação do aparelho.
+  const fireNotif = async (n, force) => {
+    const x = sRef.current, c = notifCfg(x), low = !!(x.ui && x.ui.lowStim), t = new Date();
+    const entry = { id: n.id, title: n.title, body: n.body || '', time: `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, read: false, kind: n.kind };
+    setNst((v) => { const nn = { ...v, fired: v.fired.includes(n.id) ? v.fired : [...v.fired, n.id], hist: [...v.hist, entry].slice(-40) }; nSave(nn); return nn; });
+    setNtoast({ ...entry, key: Date.now() });
+    if (c.sound && !low) chime('aviso', x);
+    const can = typeof Notification !== 'undefined' && Notification.permission === 'granted' && x.notify;
+    if (can && (force || document.visibilityState !== 'visible')) {
+      const ref = notifRef(x, n.id), acts = ref && (ref.type === 'item' || ref.type === 'med' || ref.type === 'meal' || ref.type === 'water') ? [{ action: 'done', title: 'Feito' }, { action: 'snooze', title: 'Adiar 10 min' }] : [];
+      const opts = { body: low ? '' : n.body || '', tag: String(n.id).replace(/:s\d+$/, ''), renotify: false, silent: low || !c.sound, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', data: { id: n.id }, actions: acts };
+      try { const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null; if (reg && reg.active) await reg.showNotification(n.title, opts); else new Notification(n.title, { body: opts.body, tag: opts.tag, icon: opts.icon, silent: opts.silent }); } catch (e) {}
+    }
+  };
   useEffect(() => {
     const tick = () => {
-      const now = nowRef(s);
-      const nxt = s.plan.items.filter((it) => it.day === s.day && it.status === 'pendente' && refOf(s, it) && it.start - now > 0 && it.start - now <= 10);
-      nxt.forEach((it) => { if (reminded.current[it.id]) return; reminded.current[it.id] = 1; const msg = `Em ${it.start - now} min: ${itemTitle(s, it)}`; notify(msg); chime('aviso', s); try { if (s.notify && window.Notification && Notification.permission === 'granted') new Notification('QuestDay', { body: msg }); } catch (e) {} });
-      fixedOn(s, s.day).forEach((f) => { const k = `f${s.day}${f.id}`; if (!reminded.current[k] && f.s - now > 0 && f.s - now <= 10) { reminded.current[k] = 1; const msg = `Em ${f.s - now} min: ${f.title}. Hora de ir fechando o que está fazendo.`; notify(msg); chime('aviso', s); try { if (s.notify && window.Notification && Notification.permission === 'granted') new Notification('QuestDay', { body: msg }); } catch (e) {} } });
-      (s.careCfg.meals || []).forEach((m) => { const k = `ml${s.day}${m.id}`; if (!reminded.current[k] && !(s.mealsDone[s.day] || {})[m.id] && now >= toMin(m.time) && now - toMin(m.time) < 20) { reminded.current[k] = 1; notify(`Hora do ${m.name.toLowerCase()}. Comer também é cuidar de você.`); } });
-      (s.careCfg.meds || []).forEach((m) => { const k = `m${s.day}${m.id}`; if (!reminded.current[k] && !(s.medsTaken[s.day] || {})[m.id] && now >= toMin(m.time) && now - toMin(m.time) < 30) { reminded.current[k] = 1; notify(`Hora do remédio: ${m.name}`); } });
+      const x = sRef.current, now = nowRef(x);
+      let v = nLoad(x.day); if (v.day !== nst.day) setNst(v);
+      notifPlan(x, x.day, { water: true }).forEach((n) => { if (n.at <= now && now - n.at < 3 && !v.fired.includes(n.id)) { v = { ...v, fired: [...v.fired, n.id] }; nSave(v); fireNotif(n); } });
+      const due = v.snooze.filter((z) => z.until <= Date.now());
+      if (due.length) { v = { ...v, snooze: v.snooze.filter((z) => z.until > Date.now()) }; nSave(v); setNst(v); due.forEach((z) => { const base = notifPlan(x, x.day, { water: true }).find((n) => n.id === z.id) || { id: z.id, title: 'Lembrete adiado', body: '', kind: 'bloco' }; const r = notifRef(x, z.id); if (r && r.type === 'item' && r.it.status !== 'pendente') return; fireNotif({ ...base, id: `${z.id}:s${z.k}`, title: base.title.replace(/^Em \d+ min: /, 'Agora: ') }); }); }
     };
     tick(); const id = setInterval(tick, 20000); return () => clearInterval(id);
-  }, [s.plan, s.simNow, s.day, s.careCfg, s.medsTaken, s.mealsDone, s.fixedLog]);
+  }, [s.day]);
+  useEffect(() => { if (!ntoast) return; const id = setTimeout(() => setNtoast(null), 12000); return () => clearTimeout(id); }, [ntoast]);
+  // Cliques em "Feito" / "Adiar" vindos da notificação do aparelho (com o app aberto ou abrindo pelo aviso).
+  useEffect(() => {
+    const onMsg = (e) => { const d = e.data || {}; if (d.type === 'qd-notif') act.notifAction(d.id, d.action); };
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', onMsg);
+    try { const q = new URLSearchParams(location.search); if (q.get('na') && q.get('nid')) { const a = q.get('na'), id = q.get('nid'); history.replaceState(null, '', location.pathname); setTimeout(() => act.notifAction(id, a), 600); } } catch (e) {}
+    return () => { if ('serviceWorker' in navigator) navigator.serviceWorker.removeEventListener('message', onMsg); };
+  }, []);
   const sRef = useRef(s); sRef.current = s;
   const aiExec = (name, a) => {
     const x = sRef.current, item = (id) => x.plan.items.find((y) => y.id === id), dayOf = (iso) => { const d = dayFromIso(iso); if (isNaN(d)) throw new Error('data inválida'); return d; };
@@ -4132,7 +4249,7 @@ function App({ initialTab, onRestart }) {
 
   return (
     <div className="min-h-screen bg-[#0b0c0f] text-zinc-100">
-      <nav aria-label="Seções" data-tour="menu" className="fixed bottom-0 inset-x-0 z-30 border-t border-white/[0.07] bg-[#0b0c0f]/95 backdrop-blur md:inset-x-auto md:left-0 md:top-0 md:bottom-0 md:w-56 md:border-t-0 md:border-r md:pt-8">
+      <nav aria-label="Seções" data-tour="menu" className="fixed bottom-0 inset-x-0 z-30 border-t border-white/[0.07] bg-[#0b0c0f]/95 backdrop-blur md:inset-x-auto md:left-0 md:top-0 md:bottom-0 md:w-56 md:border-t-0 md:border-r md:pt-8" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <p className="hidden md:block px-6 pb-6 text-zinc-50 font-semibold tracking-tight">QuestDay <span className="text-zinc-500 font-normal">planner</span></p>
         <ul className="grid grid-cols-5 md:grid-cols-1 md:gap-1 md:px-3">
           {TABS.map((t) => (
@@ -4150,10 +4267,10 @@ function App({ initialTab, onRestart }) {
       </nav>
       {tab === 'agora' && s.onboarded && !s.tourDone && !acctOpen && <Tour onEnd={() => up((x) => ({ ...x, tourDone: true }))} />}
       {acctOpen && <AccountModal s={s} act={act} onClose={() => setAcctOpen(false)} goSettings={() => { setAcctOpen(false); setTab('cadastro', 'conta'); }} />}
-      <main className="md:pl-56 pb-28 md:pb-12">
+      <main className="md:pl-56 pb-28 md:pb-12" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
         {s.demo && !Cloud.user && <div className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2 bg-[#2a2210]/95 backdrop-blur border-b border-[#ffc24d]/20 text-xs"><span className="text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</span><button className="text-zinc-100 underline underline-offset-4" onClick={act.exitDemo}>Sair / Criar conta</button></div>}
         <div className={`${tab === 'semana' ? 'max-w-[1680px]' : 'max-w-[1320px]'} mx-auto px-4 sm:px-6 lg:px-8 pt-5 md:pt-8 space-y-5`}>
-          <TopBar s={s} en={en} setTab={setTab} act={act} />
+          <TopBar s={s} en={en} setTab={setTab} act={act} bell={<Bell hist={nst.hist} onOpen={() => setNst((v) => { const n = { ...v, hist: v.hist.map((h) => ({ ...h, read: true })) }; nSave(n); return n; })} />} />
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">{tab === 'semana' ? 'Semana · plano da IA' : TABS.find((t) => t.id === tab).label}</h1>
           <div key={tab} className="view-in space-y-5">
           {tab === 'agora' && <Agora s={s} up={up} act={act} en={en} timer={timer} setTab={setTab} openFocus={(it) => { act.markStart(it); setFocusIt(it); }} openComp={(it) => { act.markStart(it); setComp({ itemId: it.id, start: Date.now(), every: 15, acked: 0 }); }} openWeekly={() => { setTab('semana'); setWeekly(true); }} />}
@@ -4179,6 +4296,17 @@ function App({ initialTab, onRestart }) {
       <div aria-live="polite" className="fixed z-40 left-1/2 -translate-x-1/2 bottom-24 md:bottom-8 md:ml-28 w-[min(92vw,440px)] flex justify-center pointer-events-none">
         {toast && <div key={toast.id} className="toast px-4 py-2.5 rounded-xl bg-zinc-800 border border-white/10 text-sm text-zinc-100 shadow-xl">{toast.m}</div>}
       </div>
+      {(ntoast || upd) && <div className="fixed z-[45] left-1/2 -translate-x-1/2 top-3 md:ml-28 w-[min(94vw,460px)] space-y-2" style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}>
+        {upd && <div className="toast flex items-center gap-3 px-4 py-2.5 rounded-xl bg-zinc-800 border border-white/10 text-sm text-zinc-100 shadow-xl" role="status"><Ic n="Sparkles" className="w-4 h-4 text-[#9f8fff]" /><span className="flex-1">Nova versão disponível</span><button className="text-[#cdc4ff] font-medium underline underline-offset-4" onClick={() => Pwa.applyUpdate()}>Atualizar</button></div>}
+        {ntoast && <div key={ntoast.key} className="toast rounded-xl bg-zinc-800 border border-white/10 shadow-xl p-3 space-y-2" role="alert">
+          <div className="flex items-start gap-2.5"><Pet mood="alerta" size={26} /><div className="flex-1 min-w-0"><p className="text-sm text-zinc-50 font-medium">{ntoast.title}</p>{ntoast.body && !(s.ui && s.ui.lowStim) && <p className="text-xs text-zinc-400">{ntoast.body}</p>}</div>
+            <button className="w-7 h-7 grid place-items-center rounded-md text-zinc-500 hover:bg-white/5" aria-label="Fechar aviso" onClick={() => setNtoast(null)}><Ic n="X" className="w-3.5 h-3.5" /></button></div>
+          {(() => { const r = notifRef(s, ntoast.id); if (!r || r.type === 'sleep' || r.type === 'fx') return null; return <div className="flex flex-wrap gap-1.5 pl-9">
+            {r.type === 'item' && r.it.status === 'pendente' && <button className="h-8 px-3 rounded-lg text-xs btn-primary text-zinc-950 font-medium press" onClick={() => act.notifAction(ntoast.id, 'start')}>Começar agora</button>}
+            <button className="h-8 px-3 rounded-lg text-xs bg-white/[0.07] text-zinc-200 hover:bg-white/[0.12] press" onClick={() => act.notifAction(ntoast.id, 'snooze')}>Adiar 10 min</button>
+            <button className="h-8 px-3 rounded-lg text-xs bg-[#2ee8c4]/15 text-[#7ff0d8] hover:bg-[#2ee8c4]/25 press" onClick={() => act.notifAction(ntoast.id, 'done')}>{r.type === 'water' ? '+250 ml' : 'Feito'}</button></div>; })()}
+        </div>}
+      </div>}
     </div>
   );
 }
