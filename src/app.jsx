@@ -675,17 +675,71 @@ function TimeField({ id, value, onChange, label, prefix, min, max }) {
     </div>
   );
 }
-function DurField({ value, onChange, label, min = 0, maxH = 8, className = '' }) {
+// Popover no tema do app, preso a um botão (vai para cima se não couber embaixo).
+function usePopover(W, H) {
+  const [open, setOpen] = useState(false), [pos, setPos] = useState(null);
+  const ref = useRef(null), btnRef = useRef(null), popRef = useRef(null);
+  const place = () => {
+    const b = btnRef.current; if (!b) return;
+    const r = b.getBoundingClientRect(), below = window.innerHeight - r.bottom, left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
+    setPos(below < H + 12 && r.top > below ? { left, bottom: window.innerHeight - r.top + 6 } : { left, top: r.bottom + 6 });
+  };
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    place();
+    const f = (e) => { if (ref.current && !ref.current.contains(e.target) && !(popRef.current && popRef.current.contains(e.target))) setOpen(false); };
+    const k = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', f); document.addEventListener('touchstart', f); document.addEventListener('keydown', k);
+    window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
+    return () => { document.removeEventListener('mousedown', f); document.removeEventListener('touchstart', f); document.removeEventListener('keydown', k); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open]);
+  return { open, setOpen, pos, ref, btnRef, popRef };
+}
+const pickCell = (on, dis) => `h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
+const centerPicked = (refs) => refs.forEach((r) => { const c = r.current, el = c && c.querySelector('[aria-pressed="true"]'); if (el) c.scrollTop = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2; });
+// Duração (horas + minutos): mesmo visual do seletor de horário, com todas as horas e minutos e campo para digitar.
+function DurField({ value, onChange, label, min = 0, maxH = 12, className = '' }) {
   const v = Math.max(0, Math.round(value || 0)), h = Math.floor(v / 60), m = v % 60;
-  const mins = Array.from(new Set([...Array.from({ length: 12 }, (_, i) => i * 5), m])).sort((a, b) => a - b);
+  const P = usePopover(240, 330), hRef = useRef(null), mRef = useRef(null);
+  const [txt, setTxt] = useState(String(v));
+  useEffect(() => { if (P.open && P.pos) centerPicked([hRef, mRef]); }, [P.open, !!P.pos]);
+  useEffect(() => { setTxt(String(v)); }, [v]);
   const set = (hh, mm) => onChange(Math.max(min, hh * 60 + mm));
-  const sel = 'bg-transparent text-zinc-100 tabular-nums appearance-none text-center focus:outline-none cursor-pointer px-1 py-1 rounded-md hover:bg-white/[0.06]';
+  const hours = Array.from({ length: Math.max(maxH, h) + 1 }, (_, i) => i), mins = Array.from({ length: 60 }, (_, i) => i);
+  const fmt = h ? `${h}h${m ? String(m).padStart(2, '0') : ''}` : `${m} min`;
   return (
-    <div role="group" aria-label={label} className={inp + ' flex items-center gap-0.5 px-2 ' + className}>
-      <select aria-label={`${label}: horas`} className={sel} value={h} onChange={(e) => set(Number(e.target.value), m)}>{Array.from({ length: maxH + 1 }, (_, i) => <option key={i} value={i}>{i}</option>)}</select>
-      <span className="text-zinc-500 text-sm">h</span>
-      <select aria-label={`${label}: minutos`} className={sel + ' ml-1'} value={m} onChange={(e) => set(h, Number(e.target.value))}>{mins.map((x) => <option key={x} value={x}>{String(x).padStart(2, '0')}</option>)}</select>
-      <span className="text-zinc-500 text-sm">min</span>
+    <div className={'relative ' + (className.includes('mt-') ? className.split(' ').filter((c) => c.startsWith('mt-')).join(' ') : '')} ref={P.ref}>
+      <button ref={P.btnRef} type="button" aria-haspopup="dialog" aria-expanded={P.open} aria-label={`${label}: ${fmt}`} onClick={() => P.setOpen(!P.open)}
+        className={inp + ' flex items-center justify-between text-left ' + className.split(' ').filter((c) => !c.startsWith('mt-')).join(' ')}><span className="tabular-nums">{fmt}</span><Ic n="Timer" className="w-4 h-4 text-zinc-500" /></button>
+      {P.open && P.pos && ReactDOM.createPortal(
+        <div ref={P.popRef} role="dialog" aria-label={label} style={{ position: 'fixed', ...P.pos }} className="z-[90] w-60 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><p className="text-xs text-zinc-500 px-1 pb-1">Horas</p>
+              <div ref={hRef} className="picker relative h-48 overflow-y-auto grid gap-0.5 pr-1">{hours.map((x) => { const dis = x * 60 + 59 < min; return <button type="button" key={x} aria-pressed={x === h} disabled={dis} className={pickCell(x === h, dis)} onClick={() => set(x, x * 60 + m < min ? min - x * 60 : m)}>{x}h</button>; })}</div></div>
+            <div><p className="text-xs text-zinc-500 px-1 pb-1">Minutos</p>
+              <div ref={mRef} className="picker relative h-48 overflow-y-auto grid gap-0.5 pr-1">{mins.map((x) => { const dis = h * 60 + x < min; return <button type="button" key={x} aria-pressed={x === m} disabled={dis} className={pickCell(x === m, dis)} onClick={() => set(h, x)}>{String(x).padStart(2, '0')}</button>; })}</div></div>
+          </div>
+          <label className="flex items-center gap-2 px-1 pt-2 text-xs text-zinc-500">Ou digite<input type="number" inputMode="numeric" min={min} value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={() => { const n = Math.round(Number(txt)); if (Number.isFinite(n) && n >= 0) onChange(Math.max(min, n)); else setTxt(String(v)); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-20 h-8 rounded-md bg-zinc-950 border border-white/10 px-2 text-sm text-zinc-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-[#9f8fff]/60" aria-label={`${label} em minutos`} />min</label>
+          <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
+        </div>, document.body)}
+    </div>
+  );
+}
+// "Ver como se fosse": hora real ou qualquer hora cheia do dia.
+function SimTimeField({ value, onChange }) {
+  const P = usePopover(224, 320), lRef = useRef(null);
+  useEffect(() => { if (P.open && P.pos) centerPicked([lRef]); }, [P.open, !!P.pos]);
+  const opts = [null, ...Array.from({ length: 24 }, (_, i) => i * 60)];
+  return (
+    <div className="relative" ref={P.ref}>
+      <button ref={P.btnRef} id="sim" type="button" aria-haspopup="dialog" aria-expanded={P.open} aria-label={`Ver como se fosse: ${value == null ? 'agora (hora real)' : hhmm(value)}`} onClick={() => P.setOpen(!P.open)}
+        className={inp + ' h-10 flex items-center justify-between text-left'}><span className="tabular-nums">{value == null ? 'Agora (hora real)' : hhmm(value)}</span><Ic n="Clock" className="w-4 h-4 text-zinc-500" /></button>
+      {P.open && P.pos && ReactDOM.createPortal(
+        <div ref={P.popRef} role="dialog" aria-label="Ver como se fosse" style={{ position: 'fixed', ...P.pos }} className="z-[90] w-56 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+          <div ref={lRef} className="picker relative h-60 overflow-y-auto grid grid-cols-2 gap-0.5 pr-1">{opts.map((x) => <button type="button" key={String(x)} aria-pressed={x === value} className={pickCell(x === value) + (x == null ? ' col-span-2' : '')} onClick={() => { onChange(x); P.setOpen(false); }}>{x == null ? 'Agora (hora real)' : hhmm(x)}</button>)}</div>
+          <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
+        </div>, document.body)}
     </div>
   );
 }
@@ -714,7 +768,7 @@ function TopBar({ s, en, setTab, act }) {
   const st = s.streak, alive = st.keptDay >= s.day - 1;
   return (
     <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-      <div className="flex-1 min-w-[180px]">
+      <div className="flex-1 min-w-[180px]" data-tour="energia">
         <p className="text-sm text-zinc-500 capitalize">{fmtDia(s.day)}{s.offset ? ' · simulado' : ''}</p>
         <div className="mt-1.5 flex items-center gap-2" title="Energia de hoje">
           <Ic n="BatteryMedium" className="w-4 h-4 text-zinc-500" />
@@ -928,7 +982,7 @@ function Agora({ s, up, act, en, timer, setTab, openFocus, openWeekly, openComp 
             </div>}
           </>;
         })()}
-        <section key={order ? order.id : mood ? mood.title : 'vazio'} className={card + ' p-5 sm:p-6 space-y-4 swap-in agora-glow'} aria-label="Agora">
+        <section key={order ? order.id : mood ? mood.title : 'vazio'} className={card + ' p-5 sm:p-6 space-y-4 swap-in agora-glow'} aria-label="Agora" data-tour="agora">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-[#9f8fff] flex items-center gap-2"><i className="live-dot" />Agora · {hhmm(now)}</span>
             <span className={tag} style={{ background: MODOS[mode].c + '1f', color: MODOS[mode].c }}>{MODOS[mode].t}</span>
@@ -1006,7 +1060,7 @@ function Agora({ s, up, act, en, timer, setTab, openFocus, openWeekly, openComp 
         )}
       </div>
       {runR && <RoutineRunner s={s} rid={runR} act={act} onClose={() => setRunR(null)} />}
-      <aside className="space-y-3">
+      <aside className="space-y-3" data-tour="cuidados">
         <StreakMini s={s} />
         <AsideTabs s={s} act={act}>{(tab) => <>
           {tab === 'cuidar' && <CareCard s={s} act={act} setTab={setTab} bare />}
@@ -1022,9 +1076,8 @@ function Agora({ s, up, act, en, timer, setTab, openFocus, openWeekly, openComp 
             <div className="border-t border-white/[0.06] pt-3 space-y-2"><p className="text-sm text-zinc-300">Dia de exaustão?</p><p className="text-xs text-zinc-500 hint">Protege a ofensiva, deixa só o essencial e manda o resto para outros dias.</p>
               <button className={btnG + ' w-full'} onClick={act.survival}><Ic n="ShieldCheck" />{s.today.survival ? 'Sair do modo sobrevivência' : 'Hoje é dia de sobrevivência'}</button></div>
             <div className="border-t border-white/[0.06] pt-3"><PauseBlock s={s} act={act} setTab={setTab} /></div>
-            <div className="border-t border-white/[0.06] pt-3 space-y-1.5"><label className="text-sm text-zinc-300" htmlFor="sim">Ver como se fosse</label>
-              <select id="sim" className={inp + ' h-10'} value={s.simNow == null ? '' : s.simNow} onChange={(e) => up((x) => ({ ...x, simNow: e.target.value === '' ? null : Number(e.target.value) }))}>
-                <option value="">Agora (hora real)</option>{Array.from({ length: 18 }, (_, i) => (i + 6) * 60).map((m) => <option key={m} value={m}>{hhmm(m)}</option>)}</select>
+            <div className="border-t border-white/[0.06] pt-3 space-y-1.5"><p className="text-sm text-zinc-300">Ver como se fosse</p>
+              <SimTimeField value={s.simNow == null ? null : s.simNow} onChange={(v) => up((x) => ({ ...x, simNow: v }))} />
               <p className="text-xs text-zinc-500 hint">Para testar a babá em outros horários.</p></div>
           </div>}
         </>}</AsideTabs>
@@ -1281,7 +1334,7 @@ function FixedCheck({ s, day, f, act, onClose, inline }) {
   const [st, setSt] = useState(L && L.start ? L.start : today && !before ? clampT(f.plan.s, 0, now) : before ? clampT(f.plan.s, now, 1439) : f.plan.start);
   const [en, setEn] = useState(L && L.end ? L.end : today && !before ? (left ? clampT(f.plan.e, 0, now) : clampT(f.plan.e, now, 1439)) : f.plan.end);
   const [trips, setTrips] = useState(true), [moveT, setMoveT] = useState(true);
-  const hasTrips = work && fixedPlan(s, day).some((t) => t.type === 'trajeto');
+  const hasTrips = (work || f.type === 'compromisso') && fixedPlan(s, day).some((t) => t.type === 'trajeto' && (t.of ? t.of === f.id : work));
   const stMin = before ? now : null, stMax = today && !before ? now : null;
   const enMin = Math.max(toMin(st) + 5, today && (!left || before) ? now : 0), enMax = today && left && !before ? now : null;
   const startedOrAfter = today && !before;
@@ -2538,6 +2591,48 @@ function AccountModal({ s, act, onClose, goSettings }) {
     </div>, document.body);
 }
 
+const TOUR = [
+  { k: 'energia', t: 'Seu dia no seu ritmo', d: 'Toda manhã um check-in rápido de sono e energia. Com ele eu deixo o dia mais leve ou mais cheio, e a barra mostra quanto você ainda tem.' },
+  { k: 'agora', t: 'Uma coisa de cada vez', d: 'Aqui fica só o que importa agora. Se travar, use "Não sei por onde começar" ou "Travou / trocar por algo mais leve": eu quebro em passos ou troco a tarefa.' },
+  { k: 'cuidados', t: 'Cuidados e o Lume', d: 'Água, refeições e remédios ficam aqui, junto com a sua ofensiva. Cuidar de você também conta, e o Lume cresce com a sua constância.' },
+  { k: 'menu', t: 'Tudo no menu', d: 'Na Semana você vê o plano inteiro. Em Minha Rotina ajusta horários, tarefas e preferências. E em Conta cuida do login, dos lembretes e do celular.' },
+];
+function Tour({ onEnd }) {
+  const [i, setI] = useState(0), [r, setR] = useState(null), [vw, setVw] = useState(() => window.innerWidth);
+  const step = TOUR[i];
+  useEffect(() => {
+    const find = () => { const els = [...document.querySelectorAll(`[data-tour="${step.k}"]`)].filter((e) => e.getClientRects().length); return els[0]; };
+    const el = find(); if (el && step.k !== 'menu') el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const upd = () => { const e = find(); setVw(window.innerWidth); if (!e) { setR(null); return; } const b = e.getBoundingClientRect(); setR({ x: b.left, y: b.top, w: b.width, h: b.height }); };
+    const t = setTimeout(upd, 380); upd();
+    window.addEventListener('resize', upd); window.addEventListener('scroll', upd, true);
+    const k = (e) => { if (e.key === 'Escape') onEnd(); if (e.key === 'ArrowRight') setI((x) => Math.min(TOUR.length - 1, x + 1)); };
+    document.addEventListener('keydown', k);
+    return () => { clearTimeout(t); window.removeEventListener('resize', upd); window.removeEventListener('scroll', upd, true); document.removeEventListener('keydown', k); };
+  }, [i]);
+  const last = i === TOUR.length - 1, pad = 8, W = Math.min(340, vw - 24);
+  let box = { left: 12, bottom: 96 };
+  if (r) {
+    const below = window.innerHeight - (r.y + r.h), cx = Math.max(12, Math.min(vw - W - 12, r.x + r.w / 2 - W / 2));
+    if (r.w < 260 && r.x + r.w + W + 24 < vw) box = { left: r.x + r.w + 16, top: Math.max(12, Math.min(window.innerHeight - 230, r.y + 8)) };
+    else if (below > 240) box = { left: cx, top: r.y + r.h + 14 };
+    else if (r.y > 240) box = { left: cx, top: Math.max(12, r.y - 14 - 200) };
+    else box = { left: cx, bottom: 16 };
+  }
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[75]" role="dialog" aria-modal="true" aria-labelledby="tour-t" aria-describedby="tour-d">
+      {r ? <div className="fixed rounded-2xl pointer-events-none transition-all duration-300 ring-2 ring-[#9f8fff]" style={{ left: r.x - pad, top: r.y - pad, width: r.w + pad * 2, height: r.h + pad * 2, boxShadow: '0 0 0 9999px rgba(5,6,10,.66)' }} />
+        : <div className="fixed inset-0 bg-black/60" />}
+      <div className="fixed pop-in rounded-2xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-5 space-y-3" style={{ ...box, width: W }} key={i}>
+        <div className="flex items-center gap-3"><Pet mood="alerta" size={34} /><div className="min-w-0"><p className="text-[11px] text-zinc-500 tabular-nums">{i + 1} de {TOUR.length}</p><p id="tour-t" className="text-zinc-50 font-medium">{step.t}</p></div></div>
+        <p id="tour-d" className="text-sm text-zinc-400 leading-relaxed">{step.d}</p>
+        <div className="flex items-center gap-2 pt-1"><div className="flex gap-1 flex-1" aria-hidden="true">{TOUR.map((_, j) => <i key={j} className={`h-1.5 rounded-full transition-all ${j === i ? 'w-5 bg-[#9f8fff]' : 'w-1.5 bg-white/15'}`} />)}</div>
+          {!last && <button className={btnL} onClick={onEnd}>Pular</button>}
+          <button className={btnP + ' min-h-[40px] h-10 text-sm'} autoFocus onClick={() => (last ? onEnd() : setI(i + 1))}>{last ? 'Começar' : 'Próximo'}<Ic n={last ? 'Check' : 'ArrowRight'} className="w-4 h-4" /></button></div>
+      </div>
+    </div>, document.body);
+}
+
 /* ===================== MINHA ROTINA: visão geral ===================== */
 function RestartOnb({ onRestart }) {
   const [sure, setSure] = useState(false);
@@ -3279,27 +3374,37 @@ async function askAssistant(message, state) {
   return localBrain(message, state);
 }
 
+// Lume: gatinha do app. Cores vêm de variáveis CSS (--pet-*) para seguir o tema claro/escuro.
+// Animações (piscar, orelhas, rabinho, respiração) param sozinhas no modo baixo estímulo.
 function Pet({ mood, size = 40 }) {
-  const eyes = mood === 'alerta'
-    ? <><circle cx="19" cy="26" r="2.1" fill="#ececf1" /><circle cx="29" cy="26" r="2.1" fill="#ececf1" /><circle cx="19.7" cy="25.3" r=".6" fill="#0b0c0f" /><circle cx="29.7" cy="25.3" r=".6" fill="#0b0c0f" /></>
-    : mood === 'calmo'
-      ? <><path d="M16.8 26.4 q2.2 1.6 4.4 0" stroke="#ececf1" strokeWidth="1.5" fill="none" strokeLinecap="round" /><path d="M26.8 26.4 q2.2 1.6 4.4 0" stroke="#ececf1" strokeWidth="1.5" fill="none" strokeLinecap="round" /></>
-      : <><path d="M16.8 26.8 q2.2 -1.2 4.4 0" stroke="#9a9cb0" strokeWidth="1.4" fill="none" strokeLinecap="round" /><path d="M26.8 26.8 q2.2 -1.2 4.4 0" stroke="#9a9cb0" strokeWidth="1.4" fill="none" strokeLinecap="round" /></>;
+  const F = { fill: 'var(--pet-fill)' }, INK = 'var(--pet-ink)', LINE = '#9f8fff', PINK = '#ff8fc0';
+  const sono = mood === 'sono', alerta = mood === 'alerta';
+  const ear = (side) => {
+    const m = (x) => (side === 'l' ? x : 48 - x), tilt = sono ? (side === 'l' ? -26 : 26) : mood === 'calmo' ? (side === 'l' ? -6 : 6) : 0;
+    return <g transform={`rotate(${tilt} ${m(16)} ${sono ? 21 : 19})`}><g className={`pet-ear-${side}`}>
+      <path d={`M${m(13.2)} 21 Q${m(11.6)} 14 ${m(13.4)} 9.4 Q${m(14)} 8.4 ${m(15)} 9 Q${m(18.8)} 11.6 ${m(21.6)} 15.8`} stroke={LINE} strokeWidth="1.5" style={F} strokeLinejoin="round" strokeLinecap="round" />
+      <path d={`M${m(14.8)} 17.6 Q${m(14.2)} 13.8 ${m(15.1)} 11.8 Q${m(17.4)} 13.4 ${m(19)} 15.6 Z`} fill={PINK} opacity=".55" />
+    </g></g>;
+  };
+  const eye = (x) => alerta
+    ? <g><ellipse cx={x} cy="26.2" rx="2.5" ry="2.8" style={{ fill: 'var(--pet-eye)' }} /><circle cx={x + 0.3} cy="26.7" r="1.85" style={{ fill: 'var(--pet-pupil)' }} /><circle cx={x - 0.35} cy="25.9" r=".68" fill="#fff" /><circle cx={x + 0.95} cy="27.6" r=".32" fill="#fff" opacity=".85" /></g>
+    : sono ? <path d={`M${x - 2.2} 26.6 q2.2 1.5 4.4 0`} stroke={INK} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".75" />
+      : <path d={`M${x - 2.2} 27.2 q2.2 -2.4 4.4 0`} stroke={INK} strokeWidth="1.5" fill="none" strokeLinecap="round" />;
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="overflow-visible">
-      <g className={mood === 'sono' ? 'pet-breathe-slow' : 'pet-breathe'} style={{ transformOrigin: '24px 40px' }}>
-        <path d="M38 33 q7 -1 5 -9" stroke="#2ee8c4" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        {mood === 'sono'
-          ? <><path d="M13.5 19 Q9 15 8 20 Q10 22 14.5 21" stroke="#9f8fff" strokeWidth="1.5" fill="#9f8fff14" strokeLinejoin="round" /><path d="M34.5 19 Q39 15 40 20 Q38 22 33.5 21" stroke="#9f8fff" strokeWidth="1.5" fill="#9f8fff14" strokeLinejoin="round" /></>
-          : <><path d={mood === 'alerta' ? 'M14 19 L12.5 8.5 L21 15' : 'M14 19 L11 11 L20.5 15.5'} stroke="#9f8fff" strokeWidth="1.5" fill="#9f8fff14" strokeLinejoin="round" /><path d={mood === 'alerta' ? 'M34 19 L35.5 8.5 L27 15' : 'M34 19 L37 11 L27.5 15.5'} stroke="#9f8fff" strokeWidth="1.5" fill="#9f8fff14" strokeLinejoin="round" /></>}
-        <ellipse cx="24" cy="28" rx="14.5" ry="12" stroke="#9f8fff" strokeWidth="1.6" fill="#141622" />
-        {eyes}
-        {mood !== 'sono' && <><circle cx="15.5" cy="30.5" r="1.6" fill="#2ee8c4" opacity=".45" /><circle cx="32.5" cy="30.5" r="1.6" fill="#2ee8c4" opacity=".45" /></>}
-        <path d={mood === 'sono' ? 'M22.6 32 h2.8' : 'M22.4 31.2 q1.6 1.4 3.2 0'} stroke="#ececf1" strokeWidth="1.3" fill="none" strokeLinecap="round" />
-        {LUME_LV >= 1 && <g><path d="M12 36.5 Q24 42 36 36.5 L35 39.5 Q24 44.5 13 39.5 Z" fill="#ff6fb5" /><path d="M30 39 l2.5 6 l3 -1 l-2 -6" fill="#ff6fb5" /><path d="M14 38 Q24 42.5 34 38" stroke="#ffb3d9" strokeWidth=".8" fill="none" /></g>}
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="overflow-visible pet">
+      <g className={sono ? 'pet-breathe-slow' : 'pet-breathe'} style={{ transformOrigin: '24px 40px' }}>
+        <g className="pet-tail"><path d="M36.6 34.4 C41.8 34.8 44.8 31.4 43.6 26.6 C43.2 25 41.4 25.4 41.8 27.1 C42.5 30.3 40.4 32.1 37.2 31.6" stroke="#2ee8c4" strokeWidth="1.4" style={F} strokeLinejoin="round" strokeLinecap="round" /></g>
+        {ear('l')}{ear('r')}
+        <ellipse cx="24" cy="28.2" rx="14.6" ry="12" stroke={LINE} strokeWidth="1.6" style={F} />
+        <g className={alerta ? 'pet-blink' : ''}>{eye(18.4)}{eye(29.6)}</g>
+        {!sono && <><ellipse cx="15.4" cy="31.4" rx="2" ry="1.25" fill={PINK} opacity=".32" /><ellipse cx="32.6" cy="31.4" rx="2" ry="1.25" fill={PINK} opacity=".32" /></>}
+        <path d="M23.2 29.9 h1.6 l-.8 .9 z" fill={PINK} stroke={PINK} strokeWidth=".4" strokeLinejoin="round" />
+        <path d={sono ? 'M22.9 32.2 h2.2' : 'M22.1 31.3 q.95 1 1.9 0 q.95 1 1.9 0'} stroke={INK} strokeWidth="1.1" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <g stroke={LINE} strokeWidth=".7" strokeLinecap="round" opacity=".55"><path d="M8.8 29.2 L13.6 29.9" /><path d="M9.2 32.4 L13.8 31.6" /><path d="M39.2 29.2 L34.4 29.9" /><path d="M38.8 32.4 L34.2 31.6" /></g>
+        {LUME_LV >= 1 && <g><path d="M12 36.6 Q24 42.2 36 36.6 L35 39.6 Q24 44.6 13 39.6 Z" fill="#ff6fb5" /><path d="M30 39 l2.5 6 l3 -1 l-2 -6" fill="#ff6fb5" /><path d="M14 38.1 Q24 42.6 34 38.1" stroke="#ffb3d9" strokeWidth=".8" fill="none" /></g>}
       </g>
-      {mood === 'sono' && <text x="37" y="12" fontSize="8" fill="#2ee8c4" className="pet-z" fontFamily="Inter, sans-serif">z</text>}
-      {mood === 'alerta' && <circle cx="41" cy="9" r="1.6" fill="#2ee8c4" className="pet-z" />}
+      {sono && <text x="37" y="12" fontSize="8" fill="#2ee8c4" className="pet-z" fontFamily="Inter, sans-serif">z</text>}
+      {alerta && <circle cx="41" cy="9" r="1.6" fill="#2ee8c4" className="pet-z" />}
     </svg>
   );
 }
@@ -3703,8 +3808,8 @@ function App({ initialTab, onRestart }) {
         const lg = { ...(x.fixedLog || {}) }, dl = { ...(lg[day] || {}) }, fx = fixedPlan(x, day), f = fx.find((y) => y.id === id);
         if (!f) return x;
         if (entry) dl[id] = entry; else delete dl[id];
-        const trips = fx.filter((t) => t.type === 'trajeto');
-        if (f.type === 'trabalho' && o.trips) trips.forEach((t) => { if (entry && entry.st === 'nao') dl[t.id] = { st: 'nao' }; else if (dl[t.id] && dl[t.id].st === 'nao') delete dl[t.id]; });
+        const trips = fx.filter((t) => t.type === 'trajeto' && (t.of ? t.of === id : f.type === 'trabalho'));
+        if ((f.type === 'trabalho' || f.type === 'compromisso') && o.trips) trips.forEach((t) => { if (entry && entry.st === 'nao') dl[t.id] = { st: 'nao' }; else if (dl[t.id] && dl[t.id].st === 'nao') delete dl[t.id]; });
         if (f.type === 'trabalho' && o.moveTrips && entry && entry.start) {
           const ida = trips.filter((t) => t.e <= f.s + 5).pop(), volta = trips.find((t) => t.s >= f.e - 5);
           const nw = day === x.day ? nowRef(x) : null;
@@ -3852,7 +3957,7 @@ function App({ initialTab, onRestart }) {
 
   return (
     <div className="min-h-screen bg-[#0b0c0f] text-zinc-100">
-      <nav aria-label="Seções" className="fixed bottom-0 inset-x-0 z-30 border-t border-white/[0.07] bg-[#0b0c0f]/95 backdrop-blur md:inset-x-auto md:left-0 md:top-0 md:bottom-0 md:w-56 md:border-t-0 md:border-r md:pt-8">
+      <nav aria-label="Seções" data-tour="menu" className="fixed bottom-0 inset-x-0 z-30 border-t border-white/[0.07] bg-[#0b0c0f]/95 backdrop-blur md:inset-x-auto md:left-0 md:top-0 md:bottom-0 md:w-56 md:border-t-0 md:border-r md:pt-8">
         <p className="hidden md:block px-6 pb-6 text-zinc-50 font-semibold tracking-tight">QuestDay <span className="text-zinc-500 font-normal">planner</span></p>
         <ul className="grid grid-cols-5 md:grid-cols-1 md:gap-1 md:px-3">
           {TABS.map((t) => (
@@ -3868,6 +3973,7 @@ function App({ initialTab, onRestart }) {
             <span className="min-w-0 text-left"><span className="block text-zinc-200 truncate">Conta</span><span className="block text-[11px] text-zinc-500 truncate">{Cloud.user ? Cloud.user.email || 'conectada' : s.demo ? 'demonstração' : 'só neste aparelho'}</span></span></button>
         </div>
       </nav>
+      {tab === 'agora' && s.onboarded && !s.tourDone && !acctOpen && <Tour onEnd={() => up((x) => ({ ...x, tourDone: true }))} />}
       {acctOpen && <AccountModal s={s} act={act} onClose={() => setAcctOpen(false)} goSettings={() => { setAcctOpen(false); setTab('cadastro', 'conta'); }} />}
       <main className="md:pl-56 pb-28 md:pb-12">
         {s.demo && !Cloud.user && <div className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2 bg-[#2a2210]/95 backdrop-blur border-b border-[#ffc24d]/20 text-xs"><span className="text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</span><button className="text-zinc-100 underline underline-offset-4" onClick={act.exitDemo}>Sair / Criar conta</button></div>}
@@ -3922,7 +4028,7 @@ function obDefaults() {
   return {
     bed: '23:00', wake: '06:00',
     work: { on: false, title: 'Trabalho', days: [1, 2, 3, 4, 5], start: '08:00', end: '14:00', trip: true, ida: 50, volta: 50 },
-    aula: { on: false, title: 'Faculdade', days: [1, 3], start: '19:00', end: '22:00' },
+    aula: { on: false, title: 'Faculdade', days: [1, 3], start: '19:00', end: '22:00', trip: true, ida: 40, volta: 40 },
     outros: [],
     peak: 'manha', intensity: 'ritmo', transitionMin: 15,
     tasks: [],
@@ -3936,17 +4042,19 @@ function mealsFor(a) {
   const almoco = wEnd != null && wEnd >= 690 && wEnd <= 930 ? wEnd + 25 : 750;
   return [{ id: 'cafe', name: 'Café da manhã', time: hhmm(wake + 30) }, { id: 'almoco', name: 'Almoço', time: hhmm(almoco) }, { id: 'lanche', name: 'Lanche', time: hhmm(Math.max(almoco + 150, 990)) }, { id: 'jantar', name: 'Jantar', time: hhmm(Math.min(bed - 150, 1230)) }];
 }
+function addTrips(fixed, id, o, tIda, tVolta) {
+  const ida = Math.max(5, o.ida || 20), volta = Math.max(5, o.volta || 20);
+  fixed.push({ id: id + 'i', of: id, type: 'trajeto', title: tIda, days: o.days, start: hhmm(toMin(o.start) - 5 - ida), end: hhmm(toMin(o.start) - 5) });
+  fixed.push({ id: id + 'v', of: id, type: 'trajeto', title: tVolta, days: o.days, start: hhmm(toMin(o.end) + 5), end: hhmm(toMin(o.end) + 5 + volta) });
+}
 function buildFromOnboarding(a) {
   const today = realToday(), fixed = [];
   if (a.work.on) {
     fixed.push({ id: 'w', type: 'trabalho', title: a.work.title || 'Trabalho', days: a.work.days, start: a.work.start, end: a.work.end });
-    if (a.work.trip) {
-      fixed.push({ id: 'wi', type: 'trajeto', title: 'Trajeto de ida', days: a.work.days, start: hhmm(toMin(a.work.start) - 5 - a.work.ida), end: hhmm(toMin(a.work.start) - 5) });
-      fixed.push({ id: 'wv', type: 'trajeto', title: 'Trajeto de volta', days: a.work.days, start: hhmm(toMin(a.work.end) + 5), end: hhmm(toMin(a.work.end) + 5 + a.work.volta) });
-    }
+    if (a.work.trip) addTrips(fixed, 'w', a.work, 'Trajeto de ida', 'Trajeto de volta');
   }
-  if (a.aula.on) fixed.push({ id: 'a', type: 'compromisso', title: a.aula.title || 'Faculdade', days: a.aula.days, start: a.aula.start, end: a.aula.end });
-  a.outros.filter((o) => o.title.trim() && o.days.length).forEach((o, i) => fixed.push({ id: 'o' + i, type: 'compromisso', title: o.title.trim(), days: o.days, start: o.start, end: o.end }));
+  if (a.aula.on) { const t = a.aula.title || 'Faculdade'; fixed.push({ id: 'a', type: 'compromisso', title: t, days: a.aula.days, start: a.aula.start, end: a.aula.end }); if (a.aula.trip) addTrips(fixed, 'a', a.aula, `Ida · ${t}`, `Volta · ${t}`); }
+  a.outros.filter((o) => o.title.trim() && o.days.length).forEach((o, i) => { const t = o.title.trim(); fixed.push({ id: 'o' + i, type: 'compromisso', title: t, days: o.days, start: o.start, end: o.end }); if (o.trip) addTrips(fixed, 'o' + i, o, `Ida · ${t}`, `Volta · ${t}`); });
   const tasks = a.tasks.map((t, i) => { const sd = suggestDur('media', t.load); return { id: 't' + i + uid(), title: t.title, cat: t.cat || 'Pessoal', prio: 'media', load: t.load, dur: sd.dur, min: sd.min, minText: t.minText || 'Só começar, 5 minutos', freq: t.freq, where: t.where || 'casa' }; });
   const cycles = OB_CYCLES.filter((c) => a.care.cycles.includes(c.id)).map((c) => ({ ...c, last: today - (c.every === 1 ? 1 : Math.ceil(c.every / 2)) }));
   const meds = a.care.meds && a.care.med.name.trim() ? [{ id: uid(), name: a.care.med.name.trim(), time: a.care.med.time, stock: null, dose: 1 }] : [];
@@ -3957,7 +4065,7 @@ function buildFromOnboarding(a) {
     exams: [], projects: [], outcomes: [], reviews: {}, sampleReviewDays: [], durLog: [], durNotes: [], transitionMin: a.transitionMin,
     careCfg: { waterMl: a.care.water ? 2000 : 0, meds, meals: a.care.meals ? mealsFor(a) : [] }, water: {}, medsTaken: {},
     cycleCfg: { on: !!a.care.cycleOn, start: today - 1, length: 28, period: 5 }, notify: false,
-    leaveCfg: { items: a.care.leave && a.work.on && a.work.trip ? ['Chave', 'Carteira', 'Carregador', 'Garrafa de água', 'Fone'] : [] },
+    leaveCfg: { items: a.care.leave && ((a.work.on && a.work.trip) || (a.aula.on && a.aula.trip) || a.outros.some((o) => o.trip)) ? ['Chave', 'Carteira', 'Carregador', 'Garrafa de água', 'Fone'] : [] },
     semester: { start: today, end: today + 120, holidays: [...feriadosBR(y), ...feriadosBR(y + 1)].filter((h) => h.date >= today && h.date <= today + 120) },
     prefs: { peak: a.peak, intensity: a.intensity }, ui: { ...a.ui }, onboarded: true, vacations: [], routines: ROUTINES0, moods: {}, badges: {}, missions: {},
     plan: { days: [], items: [], unplaced: [], at: null },
@@ -3972,6 +4080,10 @@ function Onboarding({ onDone, onExample, onCloud }) {
   const set = (p) => setA((x) => ({ ...x, ...p }));
   const setIn = (k, p) => setA((x) => ({ ...x, [k]: { ...x[k], ...p } }));
   useEffect(() => { const r = document.documentElement; r.classList.toggle('low-stim', a.ui.lowStim); r.classList.toggle('light', a.ui.theme === 'light'); r.classList.toggle('font-legivel', a.ui.font === 'legivel'); }, [a.ui]);
+  const tripPick = (o, upd, remote, k = '') => <>
+    <Seg value={o.trip ? 'sim' : 'nao'} onChange={(v) => upd({ trip: v === 'sim', ida: o.ida || 20, volta: o.volta || 20 })} options={[['sim', 'Tem trajeto'], ['nao', remote]]} label="Trajeto" />
+    {o.trip && <div className="grid grid-cols-2 gap-2 max-w-sm"><div><span className="text-xs text-zinc-500">Ida</span><DurField label="Tempo de ida" className="h-11 mt-1" min={5} value={o.ida || 20} onChange={(v) => upd({ ida: v })} /></div><div><span className="text-xs text-zinc-500">Volta</span><DurField label="Tempo de volta" className="h-11 mt-1" min={5} value={o.volta || 20} onChange={(v) => upd({ volta: v })} /></div></div>}
+  </>;
   const N = 6, next = () => { if (step === N) { setBuilt(buildFromOnboarding(a)); setStep(7); } else setStep(step + 1); };
   const back = () => setStep(Math.max(0, step - 1));
   const chip = (on, onClick, label, extra = '') => <button type="button" aria-pressed={on} onClick={onClick} className={`min-h-[44px] px-4 rounded-xl border text-sm press ${on ? 'border-[#9f8fff] bg-[#9f8fff]/15 text-zinc-50' : 'border-white/10 text-zinc-300 hover:bg-white/[0.05]'} ${extra}`}>{label}</button>;
@@ -4010,7 +4122,7 @@ function Onboarding({ onDone, onExample, onCloud }) {
     </div>);
   if (step === 1) body = (
     <div className="space-y-6"><Q t="Em um dia normal, que horas você tenta dormir e acordar?" d="Eu uso isso para saber onde o seu dia começa e termina, e para calcular a energia." />
-      <div className="flex flex-wrap gap-2">{[['Madrugadora', '22:00', '05:30'], ['Horário comercial', '23:00', '06:30'], ['Noturna', '01:00', '09:00']].map(([l, b, w]) => chip(a.bed === b && a.wake === w, () => set({ bed: b, wake: w }), l))}</div>
+      <div className="flex flex-wrap gap-2">{[['Acordo cedo', '22:00', '05:30'], ['Padrão', '23:00', '06:30'], ['Durmo tarde', '01:00', '09:00']].map(([l, b, w]) => chip(a.bed === b && a.wake === w, () => set({ bed: b, wake: w }), l))}</div>
       <div className="grid grid-cols-2 gap-3 max-w-sm"><div><span className="text-xs text-zinc-500">Dormir</span><TimeField id="ob-bed" label="Dormir" value={a.bed} onChange={(v) => set({ bed: v })} /></div><div><span className="text-xs text-zinc-500">Acordar</span><TimeField id="ob-wake" label="Acordar" value={a.wake} onChange={(v) => set({ wake: v })} /></div></div>
       <p className="text-sm text-zinc-500">Meta de sono: {fmtH(sleepHours(a.bed, a.wake))} por noite.</p>
     </div>);
@@ -4019,16 +4131,16 @@ function Onboarding({ onDone, onExample, onCloud }) {
       {toggleRow(a.work.on, () => setIn('work', { on: !a.work.on }), 'Trabalho / estágio', 'Dias, horário e trajeto', <>
         <input className={inp + ' h-10 max-w-sm'} value={a.work.title} onChange={(e) => setIn('work', { title: e.target.value })} aria-label="Nome do trabalho" />
         <DayChips days={a.work.days} onChange={(d) => setIn('work', { days: d })} />{timePair(a.work, 'work')}
-        <Seg value={a.work.trip ? 'sim' : 'nao'} onChange={(v) => setIn('work', { trip: v === 'sim' })} options={[['sim', 'Tem trajeto'], ['nao', 'É remoto']]} label="Trajeto" />
-        {a.work.trip && <div className="grid grid-cols-2 gap-2 max-w-sm"><div><span className="text-xs text-zinc-500">Ida</span><DurField label="Tempo de ida" className="h-11 mt-1" min={5} maxH={4} value={a.work.ida} onChange={(v) => setIn('work', { ida: v })} /></div><div><span className="text-xs text-zinc-500">Volta</span><DurField label="Tempo de volta" className="h-11 mt-1" min={5} maxH={4} value={a.work.volta} onChange={(v) => setIn('work', { volta: v })} /></div></div>}
+        {tripPick(a.work, (p) => setIn('work', p), 'É remoto')}
       </>)}
-      {toggleRow(a.aula.on, () => setIn('aula', { on: !a.aula.on }), 'Aulas / faculdade', 'Ou importe o .ics depois em Minha Rotina', <><DayChips days={a.aula.days} onChange={(d) => setIn('aula', { days: d })} />{timePair(a.aula, 'aula')}</>)}
+      {toggleRow(a.aula.on, () => setIn('aula', { on: !a.aula.on }), 'Aulas / faculdade', 'Dias, horário e trajeto (ou importe o .ics depois)', <><DayChips days={a.aula.days} onChange={(d) => setIn('aula', { days: d })} />{timePair(a.aula, 'aula')}{tripPick(a.aula, (p) => setIn('aula', p), 'É online')}</>)}
       {a.outros.map((o, i) => <div key={i} className="rounded-2xl border border-[#9f8fff]/45 bg-[#9f8fff]/[0.06] p-4 space-y-3 rise">
         <div className="flex gap-2"><input className={inp + ' h-10'} placeholder="Ex.: terapia, academia, curso" value={o.title} onChange={(e) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) })} aria-label="Nome do compromisso" /><button className="w-10 h-10 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Remover" onClick={() => set({ outros: a.outros.filter((_, j) => j !== i) })}><Ic n="X" /></button></div>
         <DayChips days={o.days} onChange={(d) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, days: d } : x)) })} />
         <div className="grid grid-cols-2 gap-2 max-w-sm"><TimeField id={`o${i}s`} label="Começa" value={o.start} onChange={(v) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, start: v } : x)) })} /><TimeField id={`o${i}e`} label="Termina" value={o.end} onChange={(v) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, end: v } : x)) })} /></div>
+        {tripPick(o, (p) => set({ outros: a.outros.map((x, j) => (j === i ? { ...x, ...p } : x)) }), 'É remoto / online', `o${i}`)}
       </div>)}
-      <button className={btnG} onClick={() => set({ outros: [...a.outros, { title: '', days: [2], start: '18:00', end: '19:00' }] })}><Ic n="Plus" />Outro fixo (academia, terapia, curso)</button>
+      <button className={btnG} onClick={() => set({ outros: [...a.outros, { title: '', days: [2], start: '18:00', end: '19:00', trip: false, ida: 20, volta: 20 }] })}><Ic n="Plus" />Outro fixo (academia, terapia, curso)</button>
     </div>);
   if (step === 3) body = (
     <div className="space-y-7"><Q t="Como a sua cabeça funciona?" d="Três toques. Dá para mudar depois." />
@@ -4083,7 +4195,7 @@ function Onboarding({ onDone, onExample, onCloud }) {
       </div>);
   }
   return (
-    <div className="min-h-screen bg-[#0b0c0f] text-zinc-100 flex flex-col">
+    <div className="ob-root min-h-screen bg-[#0b0c0f] text-zinc-100 flex flex-col">
       {step > 0 && step < 7 && <header className="max-w-2xl w-full mx-auto px-5 pt-6 space-y-3">
         <div className="flex items-center gap-3"><button className="w-10 h-10 grid place-items-center rounded-lg text-zinc-400 hover:bg-white/5" aria-label="Voltar" onClick={back}><Ic n="ArrowLeft" /></button>
           <div className="flex-1 h-1.5 rounded-full bg-white/[0.07] overflow-hidden" role="progressbar" aria-valuemin={1} aria-valuemax={N} aria-valuenow={step} aria-label={`Passo ${step} de ${N}`}><div className="h-full rounded-full bar-anim" style={{ width: `${(step / N) * 100}%`, background: 'linear-gradient(90deg,#9f8fff,#2ee8c4)' }} /></div>

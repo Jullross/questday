@@ -42,9 +42,9 @@ select option{background:#18181b;color:#f4f4f5}
 .transition-warn{animation:warn 2.4s ease-in-out infinite} @keyframes warn{50%{box-shadow:0 0 0 4px rgba(255,194,77,.12)}}
 /* baixo estímulo */
 .low-stim *,.low-stim *::before,.low-stim *::after{animation:none!important;transition:none!important}
-.low-stim main,.low-stim nav{filter:saturate(.3)}
+.low-stim main,.low-stim nav,.low-stim .ob-root{filter:saturate(.35)}
 .low-stim .hint{display:none!important}
-.low-stim .agora-glow{background:rgba(24,24,27,.6)!important}
+.low-stim:not(.light) .agora-glow{background:rgba(24,24,27,.6)!important}
 .low-stim .btn-primary{background:#8f86c9!important;box-shadow:none!important}
 /* fonte e tamanho */
 .font-legivel body{font-family:'Atkinson Hyperlegible',Inter,system-ui,sans-serif;letter-spacing:.01em}
@@ -52,23 +52,38 @@ select option{background:#18181b;color:#f4f4f5}
 /* tema claro: inverte a escala de cinzas do Tailwind e escurece os acentos */
 .light{color-scheme:light;--color-zinc-950:#ffffff;--color-zinc-900:#f3f3f6;--color-zinc-800:#e6e6eb;--color-zinc-700:#d2d2da;--color-zinc-600:#a3a3ad;--color-zinc-500:#686873;--color-zinc-400:#4f4f59;--color-zinc-300:#3b3b44;--color-zinc-200:#26262d;--color-zinc-100:#17171c;--color-zinc-50:#0c0c10;--color-white:#14141a}
 .light body,.light html{background:#f7f7fa}
-.light .bg-\\[\\#0b0c0f\\]{background:#f7f7fa} .light .bg-\\[\\#0b0c0f\\]\\/95{background:rgba(247,247,250,.95)} .light .bg-\\[\\#07080a\\]{background:#f7f7fa}
-.light .text-\\[\\#9f8fff\\]{color:#5b45ee} .light .text-\\[\\#2ee8c4\\]{color:#0b8f76} .light .text-\\[\\#ffc24d\\]{color:#a86a00} .light .text-\\[\\#ff6fb5\\]{color:#c4247a} .light .text-\\[\\#ff7f5e\\]{color:#c43d16}
-.light .text-\\[\\#a8f7e8\\]{color:#0b7d68} .light .text-\\[\\#cdc4ff\\]{color:#4d39d6} .light .text-\\[\\#ffb3d9\\]{color:#b3226f}
+.light .bg-\[\#0b0c0f\]{background:#f7f7fa} .light .bg-\[\#0b0c0f\]\/95{background:rgba(247,247,250,.95)} .light .bg-\[\#07080a\]{background:#f7f7fa}
+.light .text-\[\#9f8fff\]{color:#5b45ee} .light .text-\[\#2ee8c4\]{color:#0b8f76} .light .text-\[\#ffc24d\]{color:#a86a00} .light .text-\[\#ff6fb5\]{color:#c4247a} .light .text-\[\#ff7f5e\]{color:#c43d16}
+.light .text-\[\#a8f7e8\]{color:#0b7d68} .light .text-\[\#cdc4ff\]{color:#4d39d6} .light .text-\[\#ffb3d9\]{color:#b3226f}
 .light .btn-primary{background:linear-gradient(135deg,#7f6bff,#5a43f0);color:#fff;box-shadow:0 8px 22px -10px rgba(90,67,240,.7)}
 .light .agora-glow{background:radial-gradient(120% 90% at 0% 0%,rgba(127,107,255,.10),transparent 55%),radial-gradient(90% 80% at 100% 100%,rgba(46,232,196,.08),transparent 60%),#ffffff}
 .light .trip-stripes{background:repeating-linear-gradient(135deg,rgba(91,69,238,.10) 0 6px,rgba(91,69,238,.04) 6px 12px)}
-.light .shadow-black\\/50,.light .shadow-black\\/60{--tw-shadow-color:rgba(0,0,0,.12)}
+.light .shadow-black\/50,.light .shadow-black\/60{--tw-shadow-color:rgba(0,0,0,.12)}
+.light .text-\[\#7ff0d8\]{color:#0b7d68} .light .text-\[\#c4b9ff\]{color:#4d39d6} .light .text-\[\#ffd98a\]{color:#8a5a00} .light .text-\[\#ff8da1\]{color:#c0264a} .light .text-\[\#ff9fcf\]{color:#b3226f} .light .text-\[\#ffe9a8\]{color:#8a5a00} .light .text-\[\#ff9f85\]{color:#b23a17}
+.light .bg-\[\#2a2210\]\/95{background:rgba(255,244,214,.96)} .light .bg-\[\#141622\]{background:#ffffff}
+.light .border-white\/10,.light .border-white\/\[0\.07\],.light .border-white\/\[0\.06\]{border-color:rgba(20,20,30,.10)}
+/* Baixo estímulo no tema claro: papel off-white, contraste suave, cores dessaturadas, texto cinza-escuro legível */
+.low-stim.light{--color-zinc-950:#fbf9f4;--color-zinc-900:#f1ede5;--color-zinc-800:#e5e0d6;--color-zinc-700:#d4cec2;--color-zinc-600:#a29c90;--color-zinc-500:#6b665d;--color-zinc-400:#56524a;--color-zinc-300:#45413a;--color-zinc-200:#38352f;--color-zinc-100:#2d2a26;--color-zinc-50:#24221e;--color-white:#2d2a26}
+.low-stim.light,.low-stim.light body{background:#f4f1ea}
+.low-stim.light .bg-\[\#0b0c0f\]{background:#f4f1ea} .low-stim.light .bg-\[\#0b0c0f\]\/95{background:rgba(244,241,234,.96)} .low-stim.light .bg-\[\#07080a\]{background:#f4f1ea}
+.low-stim.light .agora-glow{background:#fbf9f4!important}
+.low-stim.light .btn-primary{background:#857cbd!important;color:#fff!important}
+.low-stim.light .shadow-black\/50,.low-stim.light .shadow-black\/60{--tw-shadow-color:rgba(60,50,30,.08)}
 .light input[type=time]::-webkit-calendar-picker-indicator,.light input[type=date]::-webkit-calendar-picker-indicator{filter:none}
 .no-scrollbar{scrollbar-width:none} .no-scrollbar::-webkit-scrollbar{display:none}
 .thin-scroll{scrollbar-width:thin;scrollbar-color:#3f3f46 transparent} .thin-scroll::-webkit-scrollbar{height:8px} .thin-scroll::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:8px}
 .picker{scrollbar-width:thin;scrollbar-color:#3f3f46 transparent} .picker::-webkit-scrollbar{width:6px} .picker::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:6px}
 .toast{animation:tup .25s ease} @keyframes tup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .pet-breathe{animation:pb 3.2s ease-in-out infinite} .pet-breathe-slow{animation:pb 5.5s ease-in-out infinite} @keyframes pb{50%{transform:scale(1.035,.975)}}
+:root{--pet-fill:#161827;--pet-ink:#ececf1;--pet-eye:#ececf1;--pet-pupil:#141622} .light{--pet-fill:#ffffff;--pet-ink:#2b2440;--pet-eye:#2b2440;--pet-pupil:#2b2440}
+.pet-blink{transform-box:fill-box;transform-origin:center;animation:pblink 5.2s infinite} @keyframes pblink{0%,90%,96%,100%{transform:scaleY(1)}93%{transform:scaleY(.12)}}
+.pet-ear-l,.pet-ear-r{transform-box:fill-box;transform-origin:50% 100%} .pet-ear-l{animation:pearl 7s ease-in-out infinite} .pet-ear-r{animation:pearr 7s ease-in-out 3.1s infinite}
+@keyframes pearl{0%,84%,100%{transform:rotate(0)}87%{transform:rotate(-10deg)}90%{transform:rotate(2deg)}93%{transform:rotate(0)}} @keyframes pearr{0%,84%,100%{transform:rotate(0)}87%{transform:rotate(10deg)}90%{transform:rotate(-2deg)}93%{transform:rotate(0)}}
+.pet-tail{transform-box:fill-box;transform-origin:0% 85%;animation:ptail 3.8s ease-in-out infinite} @keyframes ptail{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(7deg)}}
 .pet-z{animation:pz 2.8s ease-in-out infinite} @keyframes pz{0%,100%{opacity:.25;transform:translateY(1px)}50%{opacity:1;transform:translateY(-1.5px)}}
 .drawer-in{animation:din .22s ease-out} @keyframes din{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 .typing{display:inline-flex;gap:3px} .typing i{width:5px;height:5px;border-radius:50%;background:#71717a;animation:ty 1s infinite} .typing i:nth-child(2){animation-delay:.15s} .typing i:nth-child(3){animation-delay:.3s} @keyframes ty{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.bar-anim,.toast,.pet-breathe,.pet-breathe-slow,.pet-z,.drawer-in,.typing i,.view-in,.rise,.swap-in,.grow-x,.pop,.chk.pop::after,.live-dot,.flame,.breathe,.confetti i,.pop-in,.pet-float,.lift,.item-card,.press{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){.pet-blink,.pet-ear-l,.pet-ear-r,.pet-tail,.bar-anim,.toast,.pet-breathe,.pet-breathe-slow,.pet-z,.drawer-in,.typing i,.view-in,.rise,.swap-in,.grow-x,.pop,.chk.pop::after,.live-dot,.flame,.breathe,.confetti i,.pop-in,.pet-float,.lift,.item-card,.press{transition:none!important;animation:none!important}}
 </style></head><body>
 <div id="root"><p style="color:#a1a1aa;padding:24px;font-family:sans-serif">Carregando…</p></div>
 <script>%%VENDOR%%</script>
