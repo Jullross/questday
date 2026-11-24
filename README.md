@@ -1,0 +1,50 @@
+# QuestDay
+
+Planner adaptativo e babá eletrônica para TDAH e autismo. Monta a semana sozinho no ritmo da sua energia, mostra uma coisa de cada vez e cuida do básico (água, remédios, comida, sono) sem culpa.
+
+## O que tem
+
+- **Agora / Semana / Cuidar / Minha Rotina / Progresso**: plano diário e semanal que se reajusta sozinho, ofensiva com dias protegidos, modo sobrevivência, férias e viagens.
+- **Lume**: assistente que entende comandos em português e, com IA, mexe no app por você.
+- **Conta e aparelhos**: login com e-mail/senha ou Google, dados sincronizados na nuvem, versões anteriores.
+- **App instalável (PWA)**: ícone na tela inicial, funciona offline.
+- **Lembretes com o app fechado**: notificações push 10 min antes de blocos e compromissos, e na hora dos remédios e refeições.
+- **Google Agenda**: importa os compromissos dos próximos 14 dias (só leitura).
+
+## Estrutura
+
+```
+src/app.jsx        o app (React)
+src/cloud.js       conta, sincronização, push, Lume pelo servidor, Google Agenda
+src/shell.html     página base (CSS próprio, fontes, tags do PWA)
+public/            service worker, manifest e ícones
+scripts/build.mjs  gera dist/ (um index.html autocontido + arquivos do PWA)
+supabase/          migrações do banco e funções do servidor (qd-lume, qd-push)
+tests/             testes com Playwright
+```
+
+## Rodar
+
+```bash
+npm install
+npm run build
+npm run serve        # http://localhost:8000
+npm test             # com o servidor acima rodando
+```
+
+Cada push na `main` publica no GitHub Pages pelo workflow `.github/workflows/pages.yml`.
+
+## Servidor (Supabase)
+
+Usa o mesmo projeto do Fluxo Previsto, com tabelas próprias (`qd_*`) e RLS: cada pessoa só lê e grava os próprios dados.
+
+- `qd_data`: estado do app (uma linha por pessoa). `qd_backup`: versões anteriores.
+- `qd_push_subs` e `qd_reminders`: aparelhos inscritos e lembretes agendados. O `pg_cron` chama `qd-push` a cada minuto quando há lembrete vencendo.
+- `qd-lume`: repassa as mensagens do Lume para a API da Anthropic com a chave guardada no servidor (segredo `ANTHROPIC_API_KEY`). Só a dona (`OWNER_ID`) e quem estiver em `qd_ai_access` pode usar.
+
+### Configuração que só dá para fazer no painel
+
+1. **Authentication → URL Configuration → Redirect URLs**: adicionar `https://jullross.github.io/questday/**`.
+2. **Authentication → Providers → Google**: ligar com o Client ID e o Client Secret de um cliente OAuth do Google Cloud (tipo "Aplicativo da Web", URI de redirecionamento `https://ziycnzsjhnswwrpotasp.supabase.co/auth/v1/callback`).
+3. **Google Agenda**: no mesmo projeto do Google Cloud, ativar a *Google Calendar API* e, na tela de consentimento, adicionar o escopo `calendar.readonly` e o seu e-mail como usuário de teste.
+4. **Edge Functions → Secrets**: `ANTHROPIC_API_KEY` com a sua chave da Anthropic.
