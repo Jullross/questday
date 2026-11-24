@@ -98,6 +98,17 @@ export const Cloud = {
     saveSession(null); ls.set(SEEN_AT, null); setStatus({ sync: 'idle', at: null, aiReady: null });
   },
 
+  // Apaga os dados do QuestDay (e o login, se não for usado por outro app) e encerra a sessão.
+  async deleteAccount() {
+    try { await Cloud.disablePush(); } catch (e) {}
+    const r = await api('/functions/v1/qd-delete-account', { method: 'POST', body: JSON.stringify({ confirm: 'EXCLUIR' }) });
+    clearTimeout(pushT); pushT = null; pending = null;
+    saveSession(null); ls.set(SEEN_AT, null); ls.set(LOCAL_AT, null); setStatus({ sync: 'idle', at: null, aiReady: null });
+    return r;
+  },
+  // Sai da conta sem perder nada: sobe o que falta antes.
+  async logout(state) { if (state) { try { await Cloud.pushNow(state); } catch (e) {} } await Cloud.signOut(); ls.set(LOCAL_AT, null); },
+
   // ---------- sincronização ----------
   markLocal() { ls.set(LOCAL_AT, String(Date.now())); },
   localAt() { return Number(ls.get(LOCAL_AT)) || 0; },

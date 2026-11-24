@@ -727,6 +727,7 @@ function TopBar({ s, en, setTab, act }) {
           <span className="text-xs text-zinc-500 tabular-nums">social {so.now}%</span>
         </div>
       </div>
+      <button onClick={act.openAccount} aria-label="Conta" title="Conta" className="md:hidden w-9 h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 text-sm font-medium">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-4 h-4" />}</button>
       <button onClick={() => act.setUi({ lowStim: !s.ui.lowStim })} aria-pressed={s.ui.lowStim} title="Modo baixo estímulo" aria-label="Modo baixo estímulo" className={`w-9 h-9 grid place-items-center rounded-full press ${s.ui.lowStim ? 'bg-[#9f8fff]/20 text-[#cdc4ff]' : 'bg-white/[0.05] text-zinc-400 hover:bg-white/[0.08]'}`}><Ic n="EyeOff" /></button>
       <button onClick={() => setTab('agora')} className="flex items-center gap-1.5 px-3 h-9 rounded-full bg-white/[0.05] text-sm text-zinc-300 hover:bg-white/[0.08]" title={`Melhor marca: ${st.best} dias`}>
         <Ic n="Flame" className="w-4 h-4 text-[#ffc24d] flame" />{st.count === 0 && st.best === 0 ? 'Começando' : alive ? `${st.count} ${st.count === 1 ? 'dia' : 'dias'}` : 'Recomeço'}{s.keptDays[s.day] ? <Ic n="Check" className="w-3.5 h-3.5 text-[#2ee8c4]" /> : null}{s.today.survival ? ' · protegida' : ''}{vacationOn(s, s.day) ? <span className="text-[#2ee8c4]"> · em pausa</span> : null}
@@ -2423,16 +2424,16 @@ function remindersFor(s) {
 /* ===================== CONTA E APARELHOS ===================== */
 const AUTH_ERR = (e) => { const m = String((e && e.message) || ''); return /invalid login/i.test(m) ? 'E-mail ou senha não conferem.' : /not confirmed/i.test(m) ? 'Falta confirmar o e-mail: abra o link que chegou na sua caixa.' : /already registered|already exists/i.test(m) ? 'Esse e-mail já tem conta. Use "Entrar".' : /password/i.test(m) && /6|characters|least/i.test(m) ? 'A senha precisa de pelo menos 6 caracteres.' : /rate|too many|seconds/i.test(m) ? 'Muitas tentativas seguidas. Espere um minuto e tente de novo.' : /fetch|network/i.test(m) ? 'Sem conexão agora. Tente de novo quando tiver internet.' : m || 'Não deu certo agora. Tente de novo.'; };
 const fmtSync = (st) => st.sync === 'syncing' ? 'Sincronizando…' : st.sync === 'error' ? 'Não consegui sincronizar agora. Tento de novo na próxima mudança.' : st.sync === 'login' ? 'A sessão expirou. Entre de novo.' : st.at ? `Sincronizado às ${new Date(st.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Pronto para sincronizar.';
-function AccountPanel({ s, onLoggedIn }) {
+function AccountPanel({ s, onLoggedIn, initial, onLogout }) {
   useCloud();
-  const [mode, setMode] = useState('entrar'), [email, setEmail] = useState(''), [pw, setPw] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState(null);
+  const [mode, setMode] = useState(initial || 'entrar'), [email, setEmail] = useState(''), [pw, setPw] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState(null);
   if (!canCloud()) return <p className="text-sm text-zinc-400">Conta e sincronização funcionam no endereço do app. Este arquivo aberto direto no computador continua só local.</p>;
   const u = Cloud.user;
   if (u) return (
     <div className="space-y-3">
       <div className="flex items-center gap-3"><span className="w-9 h-9 rounded-full grid place-items-center bg-[#9f8fff]/15 text-[#c4b9ff] shrink-0"><Ic n="Users" className="w-4 h-4" /></span>
         <span className="flex-1 min-w-0"><span className="block text-sm text-zinc-100 truncate">{u.email || 'Conta conectada'}</span><span className={`block text-xs ${Cloud.status.sync === 'error' || Cloud.status.sync === 'login' ? 'text-[#ffc24d]' : 'text-zinc-500'}`} role="status">{fmtSync(Cloud.status)}</span></span></div>
-      <div className="flex flex-wrap gap-2"><button className={btnG + ' min-h-[38px] h-9 text-sm'} onClick={() => Cloud.pushNow(s)}><Ic n="RefreshCw" className="w-3.5 h-3.5" />Sincronizar agora</button><button className={btnL} onClick={() => Cloud.signOut()}>Sair da conta</button></div>
+      <div className="flex flex-wrap gap-2"><button className={btnG + ' min-h-[38px] h-9 text-sm'} onClick={() => Cloud.pushNow(s)}><Ic n="RefreshCw" className="w-3.5 h-3.5" />Sincronizar agora</button><button className={btnL} onClick={() => (onLogout ? onLogout() : Cloud.signOut())}>Sair da conta</button></div>
       <p className="text-xs text-zinc-500 hint">Seus dados ficam salvos na nuvem e aparecem em qualquer aparelho em que você entrar. Ao sair, este aparelho continua com uma cópia local.</p>
     </div>);
   const go = async () => {
@@ -2446,7 +2447,7 @@ function AccountPanel({ s, onLoggedIn }) {
   };
   return (
     <div className="space-y-3">
-      <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] w-fit" role="tablist">{[['entrar', 'Entrar'], ['criar', 'Criar conta']].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setMsg(null); }} className={`h-8 px-3 rounded-lg text-sm press ${mode === k ? 'bg-white/10 text-zinc-100' : 'text-zinc-500'}`}>{l}</button>)}</div>
+      <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] w-fit" role="tablist">{[['criar', 'Criar conta'], ['entrar', 'Entrar']].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setMsg(null); }} className={`h-8 px-3 rounded-lg text-sm press ${mode === k ? 'bg-white/10 text-zinc-100' : 'text-zinc-500'}`}>{l}</button>)}</div>
       <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); go(); }}>
         <input className={inp} type="email" autoComplete="email" required placeholder="seu@email.com" aria-label="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
         {mode !== 'senha' && <input className={inp} type="password" autoComplete={mode === 'criar' ? 'new-password' : 'current-password'} required minLength={6} placeholder={mode === 'criar' ? 'Crie uma senha (6+ caracteres)' : 'Senha'} aria-label="Senha" value={pw} onChange={(e) => setPw(e.target.value)} />}
@@ -2474,7 +2475,7 @@ function ContaSection({ s, act }) {
   const row = (icon, title, sub, right) => <div className="flex items-center gap-3"><span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] text-zinc-300 shrink-0"><Ic n={icon} className="w-4 h-4" /></span><span className="flex-1 min-w-0"><span className="block text-sm text-zinc-100">{title}</span>{sub && <span className="block text-xs text-zinc-500">{sub}</span>}</span>{right}</div>;
   return (
     <div className="space-y-4">
-      <div className={card + ' p-5 space-y-3'}><p className="text-zinc-100 font-medium">Sua conta</p><AccountPanel s={s} onLoggedIn={() => act.cloudLogin()} /></div>
+      <div className={card + ' p-5 space-y-3'}><p className="text-zinc-100 font-medium">Sua conta</p><AccountPanel s={s} onLoggedIn={() => act.cloudLogin()} onLogout={act.logout} /></div>
       <div className={card + ' p-5 space-y-3'}>
         {row('Download', 'App no celular', Pwa.installed ? 'Instalado. Abra pelo ícone na tela de início.' : Pwa.ios ? 'No Safari: toque em Compartilhar e depois em "Adicionar à Tela de Início".' : Pwa.canInstall ? 'Ganha ícone, abre em tela cheia e funciona offline.' : 'No Chrome do celular: menu ⋮ e "Instalar app".',
           Pwa.canInstall && !Pwa.installed ? <button className={btnP + ' min-h-[38px] h-9 text-sm'} onClick={() => Pwa.install()}>Instalar</button> : null)}
@@ -2498,6 +2499,43 @@ function ContaSection({ s, act }) {
           {conf === b.id ? <span className="flex gap-1"><button className={btnL + ' text-[#ffc24d]'} onClick={async () => { const d = await Cloud.backup(b.id); if (d) act.loadRemote(d, 'Versão anterior restaurada.'); setConf(null); }}>Trocar por esta</button><button className={btnL} onClick={() => setConf(null)}>Cancelar</button></span> : <button className={btnL} onClick={() => setConf(b.id)}>Restaurar</button>}</li>)}</ul> : <p className="text-xs text-zinc-500">Ainda não há versões anteriores.</p>)}
       </div>}
     </div>);
+}
+
+function AccountModal({ s, act, onClose, goSettings }) {
+  useCloud();
+  const u = Cloud.user, [del, setDel] = useState(false), [typed, setTyped] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState(null);
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') (del ? setDel(false) : onClose()); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [del]);
+  const doDelete = async () => { setBusy(true); setErr(null); try { await act.deleteAccount(); } catch (e) { setErr('Não consegui excluir agora. Confira a internet e tente de novo.'); setBusy(false); } };
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[70] grid place-items-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="acct-t" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 sm:p-6 space-y-5 pop-in">
+        <div className="flex items-center justify-between"><h2 id="acct-t" className="text-lg font-semibold text-zinc-50">Conta</h2><button className="w-9 h-9 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
+        <section className="space-y-3">
+          <p className="text-xs uppercase tracking-wide text-zinc-500">Sessão</p>
+          {u ? <div className="flex items-center gap-3"><span className="w-10 h-10 rounded-full grid place-items-center bg-[#9f8fff]/15 text-[#c4b9ff] font-medium shrink-0">{(u.email || '?')[0].toUpperCase()}</span>
+              <span className="min-w-0"><span className="block text-sm text-zinc-100 truncate">{u.email || 'Conta conectada'}</span><span className="block text-xs text-zinc-500">{fmtSync(Cloud.status)}</span></span></div>
+            : s.demo ? <div className="rounded-xl border border-[#ffc24d]/25 bg-[#ffc24d]/[0.06] p-4 space-y-3"><p className="text-sm text-zinc-200">Você está no <b className="font-medium">modo demonstração</b>. Os dados são de exemplo e nada é salvo na nuvem.</p><button className={btnP + ' w-full'} onClick={act.exitDemo}>Sair da demonstração e criar conta</button></div>
+            : <div className="space-y-3"><p className="text-sm text-zinc-400">Seus dados estão só neste aparelho. Entre para salvar na nuvem.</p><AccountPanel s={s} onLoggedIn={() => { act.cloudLogin(); }} /></div>}
+          <button className={btnL + ' -ml-2'} onClick={goSettings}><Ic n="SlidersHorizontal" className="w-3.5 h-3.5" />Lembretes, celular e Google Agenda</button>
+        </section>
+        {u && <section className="space-y-2 border-t border-white/[0.06] pt-4"><button className={btnG + ' w-full'} onClick={act.logout}><Ic n="DoorOpen" />Sair da conta</button><p className="text-xs text-zinc-500">Seus dados continuam salvos na conta. Você volta para a tela inicial.</p></section>}
+        {u && <section className="space-y-3 rounded-xl border border-[#ff5c7a]/30 bg-[#ff5c7a]/[0.05] p-4">
+          <p className="text-sm font-medium text-[#ff8da1]">Zona de perigo</p>
+          <p className="text-xs text-zinc-400">Apaga para sempre sua rotina, histórico, lembretes e versões salvas do QuestDay. Não dá para desfazer.</p>
+          <button className="inline-flex items-center justify-center gap-2 w-full min-h-[44px] px-4 rounded-xl bg-[#ff5c7a] text-zinc-950 font-medium hover:bg-[#ff7590] press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff8da1]" onClick={() => { setDel(true); setTyped(''); }}><Ic n="Trash2" />Excluir minha conta</button>
+        </section>}
+      </div>
+      {del && <div className="fixed inset-0 z-[80] grid place-items-center p-4 bg-black/70" role="alertdialog" aria-modal="true" aria-labelledby="del-t" aria-describedby="del-d">
+        <div className="w-full max-w-sm rounded-2xl border border-[#ff5c7a]/40 bg-zinc-950 p-5 space-y-4 pop-in">
+          <h3 id="del-t" className="text-base font-semibold text-zinc-50">Excluir a conta de vez?</h3>
+          <div id="del-d" className="space-y-2 text-sm text-zinc-400"><p>Tudo do QuestDay em <b className="text-zinc-200 font-medium">{u && u.email}</b> será apagado: rotina, histórico, ofensiva, lembretes e versões salvas. Isso não tem volta.</p>
+            <p className="text-xs text-zinc-500">Se esse login também for usado no Fluxo Previsto, ele continua existindo lá. Só os dados do QuestDay são apagados.</p></div>
+          <label className="block text-xs text-zinc-500">Para confirmar, digite <b className="text-zinc-300">EXCLUIR</b><input className={inp + ' mt-1'} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" aria-label="Digite EXCLUIR para confirmar" /></label>
+          {err && <p className="text-sm text-[#ffc24d]" role="status">{err}</p>}
+          <div className="flex gap-2 justify-end"><button className={btnG} onClick={() => setDel(false)} disabled={busy}>Cancelar</button>
+            <button className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl bg-[#ff5c7a] text-zinc-950 font-medium disabled:opacity-40 press" disabled={typed.trim().toUpperCase() !== 'EXCLUIR' || busy} onClick={doDelete}>{busy ? 'Excluindo…' : 'Excluir para sempre'}</button></div>
+        </div></div>}
+    </div>, document.body);
 }
 
 /* ===================== MINHA ROTINA: visão geral ===================== */
@@ -3390,6 +3428,7 @@ function App({ initialTab, onRestart }) {
   const [cadSec, setCadSec] = useState('tarefas');
   const setTab = (t, sec) => { if (sec) setCadSec(sec); setTab0(t); try { window.scrollTo({ top: 0 }); } catch (e) {} };
   const [toast, setToast] = useState(null);
+  const [acctOpen, setAcctOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [focusIt, setFocusIt] = useState(null);
   const [weekly, setWeekly] = useState(false);
@@ -3724,8 +3763,12 @@ function App({ initialTab, onRestart }) {
     setCfg: (p) => up((x) => adapt({ ...x, ...p }, 'com o novo tempo de transição')),
     setCare: (p) => up((x) => ({ ...x, careCfg: { ...x.careCfg, ...p } })),
     setCycle: (p) => up((x) => ({ ...x, cycleCfg: { ...x.cycleCfg, ...p } })),
+    exitDemo: () => { setAcctOpen(false); try { localStorage.removeItem(KEY); localStorage.removeItem('qd-local-at'); } catch (e) {} onRestart && onRestart(); },
+    logout: async () => { setAcctOpen(false); await Cloud.logout(sRef.current); try { localStorage.removeItem(KEY); sessionStorage.setItem('qd-msg', 'Você saiu da conta. Seus dados continuam salvos nela.'); } catch (e) {} onRestart && onRestart(); },
+    deleteAccount: async () => { const r = await Cloud.deleteAccount(); setAcctOpen(false); try { localStorage.removeItem(KEY); sessionStorage.setItem('qd-msg', r && r.login_deleted ? 'Conta excluída. Todos os seus dados foram apagados.' : 'Dados do QuestDay apagados. O login continua existindo porque também é usado no Fluxo Previsto.'); } catch (e) {} onRestart && onRestart(); },
+    openAccount: () => setAcctOpen(true),
     loadRemote: (d, msg) => { if (!d || d.v !== 4) return; setTm(null); setS(fromSaved(d)); notify(msg || 'Trouxe seus dados da nuvem.'); },
-    cloudLogin: async () => { const r = await Cloud.reconcile(sRef.current); if (r.use === 'remote' && r.data && r.data.v === 4) { setTm(null); setS(fromSaved(r.data)); notify('Pronto: trouxe seus dados da nuvem.'); } else notify('Conta conectada. Seus dados agora ficam salvos na nuvem.'); },
+    cloudLogin: async () => { const demo = !!sRef.current.demo; const r = await Cloud.reconcile(demo ? null : sRef.current); if (demo && !(r.use === 'remote' && r.data && r.data.v === 4)) { setAcctOpen(false); try { localStorage.removeItem(KEY); } catch (e) {} onRestart && onRestart(); return; } if (r.use === 'remote' && r.data && r.data.v === 4) { setTm(null); setS(fromSaved(r.data)); notify('Pronto: trouxe seus dados da nuvem.'); } else notify('Conta conectada. Seus dados agora ficam salvos na nuvem.'); },
     importGcal: (evs) => {
       const x0 = sRef.current, have = new Set(x0.tasks.filter((t) => t.gcal).map((t) => t.gcal)), add = [];
       evs.forEach((e) => {
@@ -3818,8 +3861,16 @@ function App({ initialTab, onRestart }) {
               <Ic n={t.icon} className="w-5 h-5" /><span className="text-center leading-tight">{t.label}{t.sub && <span className="hidden md:inline text-zinc-500"> · {t.sub}</span>}</span></button></li>
           ))}
         </ul>
+        <div className="hidden md:block absolute bottom-0 inset-x-0 p-3 border-t border-white/[0.07]">
+          {s.demo && !Cloud.user && <div className="mb-2 rounded-xl border border-[#ffc24d]/25 bg-[#ffc24d]/[0.06] p-3 space-y-2"><p className="text-xs text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</p><button className="w-full text-left text-xs text-zinc-200 underline underline-offset-4 hover:text-white" onClick={act.exitDemo}>Sair da demonstração / Criar conta</button></div>}
+          <button onClick={() => setAcctOpen(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff]">
+            <span className="w-7 h-7 rounded-full grid place-items-center bg-white/[0.06] text-zinc-300 text-xs font-medium shrink-0">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-3.5 h-3.5" />}</span>
+            <span className="min-w-0 text-left"><span className="block text-zinc-200 truncate">Conta</span><span className="block text-[11px] text-zinc-500 truncate">{Cloud.user ? Cloud.user.email || 'conectada' : s.demo ? 'demonstração' : 'só neste aparelho'}</span></span></button>
+        </div>
       </nav>
+      {acctOpen && <AccountModal s={s} act={act} onClose={() => setAcctOpen(false)} goSettings={() => { setAcctOpen(false); setTab('cadastro', 'conta'); }} />}
       <main className="md:pl-56 pb-28 md:pb-12">
+        {s.demo && !Cloud.user && <div className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2 bg-[#2a2210]/95 backdrop-blur border-b border-[#ffc24d]/20 text-xs"><span className="text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</span><button className="text-zinc-100 underline underline-offset-4" onClick={act.exitDemo}>Sair / Criar conta</button></div>}
         <div className={`${tab === 'semana' ? 'max-w-[1680px]' : 'max-w-[1320px]'} mx-auto px-4 sm:px-6 lg:px-8 pt-5 md:pt-8 space-y-5`}>
           <TopBar s={s} en={en} setTab={setTab} act={act} />
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">{tab === 'semana' ? 'Semana · plano da IA' : TABS.find((t) => t.id === tab).label}</h1>
@@ -3915,8 +3966,9 @@ function buildFromOnboarding(a) {
   return migrate({ ...s0, plan: distribute(s0) });
 }
 function Onboarding({ onDone, onExample, onCloud }) {
-  const [login, setLogin] = useState(false), [cmsg, setCmsg] = useState(null);
-  const [step, setStep] = useState(0), [a, setA] = useState(obDefaults), [built, setBuilt] = useState(null), [free, setFree] = useState('');
+  useCloud();
+  const [cmsg, setCmsg] = useState(() => { try { const m = sessionStorage.getItem('qd-msg'); sessionStorage.removeItem('qd-msg'); return m; } catch (e) { return null; } });
+  const [step, setStep] = useState(() => (canCloud() && Cloud.user ? 1 : 0)), [a, setA] = useState(obDefaults), [built, setBuilt] = useState(null), [free, setFree] = useState('');
   const set = (p) => setA((x) => ({ ...x, ...p }));
   const setIn = (k, p) => setA((x) => ({ ...x, [k]: { ...x[k], ...p } }));
   useEffect(() => { const r = document.documentElement; r.classList.toggle('low-stim', a.ui.lowStim); r.classList.toggle('light', a.ui.theme === 'light'); r.classList.toggle('font-legivel', a.ui.font === 'legivel'); }, [a.ui]);
@@ -3937,18 +3989,24 @@ function Onboarding({ onDone, onExample, onCloud }) {
   const today = realToday();
 
   let body = null;
+  const afterLogin = async () => {
+    setCmsg('Buscando seus dados…');
+    const r = await Cloud.reconcile(null);
+    if (r.use === 'remote' && r.data && r.data.v === 4) onCloud(r.data); else { setCmsg(null); setStep(1); }
+  };
   if (step === 0) body = (
-    <div className="text-center space-y-7 py-6">
-      <div className="mx-auto w-fit pet-float"><Pet mood="alerta" size={112} /></div>
-      <div className="space-y-3"><p className="text-sm text-[#9f8fff]">Oi, eu sou o Lume.</p>
+    <div className="text-center py-8 sm:py-12">
+      <div className="mx-auto w-fit pet-float"><Pet mood="alerta" size={104} /></div>
+      <div className="mt-6 space-y-3"><p className="text-sm text-[#9f8fff]">Oi, eu sou o Lume.</p>
         <h1 className="text-3xl sm:text-4xl font-semibold text-zinc-50 tracking-tight leading-tight max-w-xl mx-auto">Um planner que monta sua semana sozinho e te diz uma coisa de cada vez, no ritmo da sua energia.</h1></div>
-      <div className="space-y-3"><button className={btnP + ' text-base px-6 min-h-[52px]'} onClick={next}><Ic n="Sparkles" />Montar minha rotina (2 min)</button>
-        <div><button className="text-sm text-zinc-500 hover:text-zinc-300 underline underline-offset-4" onClick={onExample}>Quero só explorar com uma rotina de exemplo primeiro</button></div>
-        {canCloud() && <div><button className="text-sm text-[#9f8fff] hover:text-[#c4b9ff]" onClick={() => setLogin(true)}>Já tenho conta: entrar e trazer meus dados</button></div>}</div>
-      {login && <div className="max-w-sm mx-auto text-left rounded-2xl border border-white/10 bg-zinc-900/80 p-5 space-y-3 rise">
-        <AccountPanel s={null} onLoggedIn={async () => { setCmsg('Buscando seus dados…'); const r = await Cloud.reconcile(null); if (r.use === 'remote' && r.data && r.data.v === 4) onCloud(r.data); else { setCmsg('Conta conectada, mas ainda sem dados salvos. Vamos montar sua rotina.'); setLogin(false); } }} />
-        {cmsg && <p className="text-sm text-zinc-300" role="status">{cmsg}</p>}</div>}
-      {!login && cmsg && <p className="text-sm text-zinc-400" role="status">{cmsg}</p>}
+      <div className="mt-12 sm:mt-14 max-w-sm mx-auto text-left rounded-2xl border border-white/10 bg-zinc-900/70 p-5 sm:p-6 space-y-4 rise">
+        {!canCloud() ? <><p className="text-sm text-zinc-400">Aberto direto do arquivo, o QuestDay funciona só neste aparelho, sem conta.</p><button className={btnP + ' w-full'} onClick={next}><Ic n="Sparkles" />Montar minha rotina (2 min)</button></>
+          : Cloud.user ? <><p className="text-sm text-zinc-300">Conectada como <b className="text-zinc-100 font-medium">{Cloud.user.email || 'sua conta'}</b>.</p><button className={btnP + ' w-full'} onClick={() => setStep(1)}><Ic n="Sparkles" />Montar minha rotina (2 min)</button></>
+          : <><p className="text-zinc-100 font-medium">Crie sua conta para começar</p><AccountPanel s={null} initial="criar" onLoggedIn={afterLogin} /></>}
+        {cmsg && <p className="text-sm text-zinc-300" role="status">{cmsg}</p>}
+      </div>
+      <div className="mt-12 sm:mt-14"><button className="text-sm text-zinc-500 hover:text-zinc-300 underline underline-offset-4" onClick={onExample}>Quero só explorar com uma rotina de exemplo</button>
+        <p className="mt-2 text-xs text-zinc-600">Modo demonstração: nada é salvo na nuvem.</p></div>
     </div>);
   if (step === 1) body = (
     <div className="space-y-6"><Q t="Em um dia normal, que horas você tenta dormir e acordar?" d="Eu uso isso para saber onde o seu dia começa e termina, e para calcular a energia." />
@@ -4053,7 +4111,7 @@ function Root() {
     Cloud.reconcile(local && local.v === 4 ? local : null).then((r) => { if (done) return; done = true; clearTimeout(t); if (r.use === 'remote' && r.data && r.data.v === 4) finish(r.data); setPhase('ready'); });
   }, []);
   if (phase === 'sync') return <div className="min-h-screen grid place-items-center"><div className="text-center space-y-3"><div className="mx-auto w-fit pet-float"><Pet mood="calmo" size={72} /></div><p className="text-sm text-zinc-400">Buscando seus dados…</p></div></div>;
-  if (!ready) return <Onboarding onDone={finish} onExample={() => finish(freshSeed())} onCloud={(d) => finish(d)} />;
+  if (!ready) return <Onboarding onDone={finish} onExample={() => finish({ ...freshSeed(), demo: true })} onCloud={(d) => finish(d)} />;
   return <App onRestart={() => { try { localStorage.removeItem(KEY); } catch (e) {} setReady(false); }} />;
 }
 
