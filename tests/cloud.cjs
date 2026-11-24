@@ -12,7 +12,10 @@ const SB = 'https://ziycnzsjhnswwrpotasp.supabase.co';
     if (u.pathname === '/rest/v1/qd_data' && m === 'GET') return route.fulfill({ status: 200, headers: hdr, body: JSON.stringify(stored ? [{ data: stored.data, updated_at: stored.at }] : []) });
     if (u.pathname === '/rest/v1/qd_data' && m === 'POST') { const j = JSON.parse(r.postData()); stored = { data: j.data, at: new Date().toISOString() }; return route.fulfill({ status: 201, headers: hdr, body: JSON.stringify([{ updated_at: stored.at }]) }); }
     if (u.pathname === '/functions/v1/qd-lume') { const j = JSON.parse(r.postData()); if (j.ping) return route.fulfill({ status: 200, headers: hdr, body: '{"ok":true}' });
-      return route.fulfill({ status: 200, headers: hdr, body: JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Resposta do servidor do Lume.' }] }) }); }
+      const lastMsg = j.messages[j.messages.length - 1];
+      if (typeof lastMsg.content === 'string') return route.fulfill({ status: 200, headers: hdr, body: JSON.stringify({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'g1', name: 'add_water', input: { ml: 250 }, signature: 'SIG123' }] }) });
+      const echoed = JSON.stringify(j.messages).includes('SIG123') && JSON.stringify(j.messages).includes('tool_result');
+      return route.fulfill({ status: 200, headers: hdr, body: JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: echoed ? 'Resposta do servidor do Lume.' : 'sem assinatura' }] }) }); }
     return route.fulfill({ status: 200, headers: hdr, body: '[]' });
   });
   // Aparelho 1: exemplo -> entra na conta -> sobe os dados

@@ -40,11 +40,11 @@ Usa o mesmo projeto do Fluxo Previsto, com tabelas próprias (`qd_*`) e RLS: cad
 
 - `qd_data`: estado do app (uma linha por pessoa). `qd_backup`: versões anteriores.
 - `qd_push_subs` e `qd_reminders`: aparelhos inscritos e lembretes agendados. O `pg_cron` chama `qd-push` a cada minuto quando há lembrete vencendo.
-- `qd-lume`: repassa as mensagens do Lume para a API da Anthropic com a chave guardada no servidor (segredo `ANTHROPIC_API_KEY`). Só a dona (`OWNER_ID`) e quem estiver em `qd_ai_access` pode usar.
+- `qd-lume`: traduz as mensagens do Lume para o Gemini, com a chave guardada no servidor (segredo `GEMINI_API_KEY`, o mesmo do Fluxo Previsto). Só a dona (`OWNER_ID`) e quem estiver em `qd_ai_access` pode usar.
 
 ### Configuração que só dá para fazer no painel
 
 1. **Authentication → URL Configuration → Redirect URLs**: adicionar `https://jullross.github.io/questday/**`.
 2. **Authentication → Providers → Google**: ligar com o Client ID e o Client Secret de um cliente OAuth do Google Cloud (tipo "Aplicativo da Web", URI de redirecionamento `https://ziycnzsjhnswwrpotasp.supabase.co/auth/v1/callback`).
 3. **Google Agenda**: no mesmo projeto do Google Cloud, ativar a *Google Calendar API* e, na tela de consentimento, adicionar o escopo `calendar.readonly` e o seu e-mail como usuário de teste.
-4. **Edge Functions → Secrets**: `ANTHROPIC_API_KEY` com a sua chave da Anthropic.
+4. **Edge Functions → Secrets**: `GEMINI_API_KEY` (já existe, compartilhada com o Fluxo Previsto).

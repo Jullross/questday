@@ -2490,7 +2490,7 @@ function ContaSection({ s, act }) {
         {g && <p className="text-xs text-zinc-300" role="status">{g}</p>}
       </div>
       {u && <div className={card + ' p-5 space-y-3'}>
-        {row('Sparkles', 'Lume com IA pelo servidor', ai === true ? 'Ligado. A chave fica guardada no servidor, nunca neste aparelho.' : ai === 'not_configured' ? 'Falta colocar a chave da Anthropic no servidor. Enquanto isso o Lume usa o modo local.' : ai === 'forbidden' ? 'A IA do servidor está liberada só para a dona do app. O modo local continua funcionando.' : ai === false ? 'Não consegui falar com o servidor agora.' : 'Verificando…', null)}
+        {row('Sparkles', 'Lume com IA pelo servidor', ai === true ? 'Ligado, com o Gemini. A chave fica guardada no servidor, nunca neste aparelho.' : ai === 'not_configured' ? 'Falta a chave da IA no servidor. Enquanto isso o Lume usa o modo local.' : ai === 'forbidden' ? 'A IA do servidor está liberada só para a conta da dona do app. O modo local continua funcionando.' : ai === false ? 'Não consegui falar com o servidor agora.' : 'Verificando…', null)}
       </div>}
       {u && <div className={card + ' p-5 space-y-3'}>
         {row('Archive', 'Versões anteriores', 'Guardo uma cópia a cada 6 horas de uso (as 30 últimas).', bk ? null : <button className={btnL} onClick={loadBk}>Ver</button>)}
@@ -3220,9 +3220,8 @@ function AiSettings({ s, act, onClose }) {
   return (
     <div className="mx-4 my-3 rounded-xl border border-[#9f8fff]/30 bg-zinc-950 p-4 space-y-3 rise">
       <div className="flex items-center justify-between"><p className="text-sm text-zinc-100 font-medium">Lume com IA de verdade</p><button className="w-8 h-8 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar ajustes" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
-      {Cloud.status.aiReady === true && <div className="rounded-lg bg-[#2ee8c4]/10 border border-[#2ee8c4]/20 p-3 space-y-2"><p className="text-xs text-[#7ff0d8]">O Lume já usa a IA pelo servidor da sua conta. Não precisa colocar chave aqui.</p>
-        <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" className="accent-[#2ee8c4]" checked={!(ai.off)} onChange={(e) => act.setAi({ off: !e.target.checked })} />Usar a IA do servidor</label>
-        <label className="block text-xs text-zinc-500">Modelo<select className={inp + ' h-10 mt-1 px-2'} value={ai.model || AI_MODELS[0][0]} onChange={(e) => act.setAi({ model: e.target.value })}>{AI_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>}
+      {Cloud.status.aiReady === true && <div className="rounded-lg bg-[#2ee8c4]/10 border border-[#2ee8c4]/20 p-3 space-y-2"><p className="text-xs text-[#7ff0d8]">O Lume já usa a IA pelo servidor da sua conta (Gemini). Não precisa colocar chave aqui.</p>
+        <label className="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" className="accent-[#2ee8c4]" checked={!(ai.off)} onChange={(e) => act.setAi({ off: !e.target.checked })} />Usar a IA do servidor (Gemini)</label></div>}
       <p className="text-xs text-zinc-400">Com uma chave da API da Anthropic, o Lume conversa de verdade e mexe no app por você: cria, move, conclui, registra água e humor, alivia o dia. Sem chave, ele usa o modo local.</p>
       <label className="block text-xs text-zinc-500">Chave da API<input type="password" autoComplete="off" className={inp + ' h-10 mt-1'} value={key} placeholder="sk-ant-…" onChange={(e) => setKey(e.target.value)} /></label>
       <label className="block text-xs text-zinc-500">Modelo<select className={inp + ' h-10 mt-1 px-2'} value={model} onChange={(e) => setModel(e.target.value)}>{AI_MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
@@ -3314,7 +3313,7 @@ function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, a
       const hist = []; msgs.filter((x) => x.id !== 'hi' && x.text).slice(-12).forEach((x) => { const role = x.role === 'user' ? 'user' : 'assistant'; if (hist.length && hist[hist.length - 1].role === role) hist[hist.length - 1].content += '\n' + x.text; else hist.push({ role, content: x.text }); });
       while (hist.length && hist[0].role !== 'user') hist.shift(); if (hist.length && hist[hist.length - 1].role === 'user') hist.pop();
       try { const out = await claudeTurn(s.ai && s.ai.on && s.ai.key ? s.ai : { ...(s.ai || {}), key: '' }, s, hist, m, aiExec); r = { text: out.text, cards: out.did.length ? [{ kind: 'actions', title: 'O que eu fiz', applied: out.did.join(' · '), actions: [] }] : [], ai: true }; }
-      catch (e) { const local = localBrain(m, s); r = { ...local, text: (e.status === 401 ? 'A chave da IA não funcionou, então respondi no modo local. ' : 'Não consegui falar com a IA agora, respondi no modo local. ') + local.text }; }
+      catch (e) { const local = localBrain(m, s); r = { ...local, text: (e.status === 429 ? 'A IA atingiu o limite gratuito por agora, então respondi no modo local. ' : e.status === 401 ? 'A chave da IA não funcionou, então respondi no modo local. ' : 'Não consegui falar com a IA agora, respondi no modo local. ') + local.text }; }
     }
     else { try { r = await askAssistant(m, s); } catch (e) { r = { text: 'Não consegui pensar nisso agora. Tenta de novo?', cards: [] }; } }
     await new Promise((res) => setTimeout(res, 260));

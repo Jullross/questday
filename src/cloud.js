@@ -29,7 +29,7 @@ async function api(path, opt = {}, auth = true) {
   if (auth) { const t = await token(); if (!t) throw Object.assign(new Error('login'), { status: 401 }); headers.Authorization = `Bearer ${t}`; }
   const r = await fetch(CFG.url + path, { ...opt, headers });
   if (!r.ok) {
-    let msg = ''; try { const j = await r.json(); msg = j.msg || j.message || j.error_description || j.error || ''; } catch (e) {}
+    let msg = ''; try { const j = await r.json(); msg = j.msg || j.message || j.error_description || (j.error && j.error.message) || (typeof j.error === 'string' ? j.error : '') || ''; } catch (e) {}
     throw Object.assign(new Error(msg || `HTTP ${r.status}`), { status: r.status });
   }
   const txt = await r.text(); return txt ? JSON.parse(txt) : null;
