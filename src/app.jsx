@@ -612,7 +612,7 @@ function adapt(s, reason) {
 const card = 'rounded-2xl border border-white/[0.07] bg-zinc-900/60 transition-[border-color,background-color,box-shadow] duration-300';
 const btnP = 'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl btn-primary text-zinc-950 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed press';
 const btnG = 'inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-xl border border-white/10 text-zinc-200 hover:bg-white/[0.06] hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] disabled:opacity-40 disabled:cursor-not-allowed press';
-const btnL = 'inline-flex items-center gap-1.5 min-h-[36px] px-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]';
+const btnL = 'inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[36px] px-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]';
 const inp = 'w-full h-11 rounded-xl bg-zinc-950 border border-white/10 px-3 text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#9f8fff]/60';
 const lbl = 'block text-sm text-zinc-400 mb-1.5';
 const tag = 'inline-flex items-center text-xs px-2 py-0.5 rounded-full';
@@ -625,7 +625,7 @@ function Seg({ value, options, onChange, label }) {
   );
 }
 function TimeField({ id, value, onChange, label, prefix, min, max }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false), mob = useMobile();
   const ref = useRef(null), hRef = useRef(null), mRef = useRef(null), popRef = useRef(null), btnRef = useRef(null);
   const [pos, setPos] = useState(null);
   const [h, m] = (value || '00:00').split(':');
@@ -654,22 +654,22 @@ function TimeField({ id, value, onChange, label, prefix, min, max }) {
   const lo = min == null ? 0 : min, hi = max == null ? 1439 : max;
   const okT = (t) => t >= lo && t <= hi, hOk = (x) => +x * 60 + 59 >= lo && +x * 60 <= hi;
   const fit = (x, mm) => { let t = +x * 60 + +mm; if (t < lo) t = lo; if (t > hi) t = hi; return hhmm(t); };
-  const cell = (on, dis) => `h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
+  const cell = (on, dis) => `h-11 md:h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
   return (
     <div className="relative" ref={ref}>
       <button ref={btnRef} type="button" id={id} aria-haspopup="dialog" aria-expanded={open} aria-label={`${label}: ${value}`} onClick={() => setOpen(!open)}
         className={inp + ' flex items-center justify-between text-left'}><span className="tabular-nums">{prefix && <span className="text-zinc-500 text-sm mr-1.5">{prefix}</span>}{value}</span><Ic n="Clock" className="w-4 h-4 text-zinc-500" /></button>
       {open && pos && ReactDOM.createPortal(
-        <div ref={popRef} role="dialog" aria-label={label} style={{ position: 'fixed', ...pos }} className="z-[90] w-56 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+        <>{mob && <PickBackdrop />}<div ref={popRef} role="dialog" aria-label={label} {...pickBox(mob, pos, "z-[90] w-56 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2")}>{mob && <PickHandle />}
           <div className="grid grid-cols-2 gap-2">
             <div><p className="text-xs text-zinc-500 px-1 pb-1">Hora</p>
-              <div ref={hRef} className="picker relative h-52 overflow-y-auto grid gap-0.5 pr-1">{hours.map((x) => <button type="button" key={x} aria-pressed={x === h} disabled={!hOk(x)} className={cell(x === h, !hOk(x))} onClick={() => onChange(fit(x, m))}>{x}</button>)}</div></div>
+              <div ref={hRef} className="picker relative h-[38vh] md:h-52 overflow-y-auto grid gap-0.5 pr-1">{hours.map((x) => <button type="button" key={x} aria-pressed={x === h} disabled={!hOk(x)} className={cell(x === h, !hOk(x))} onClick={() => onChange(fit(x, m))}>{x}</button>)}</div></div>
             <div><p className="text-xs text-zinc-500 px-1 pb-1">Minuto</p>
-              <div ref={mRef} className="picker relative h-52 overflow-y-auto grid gap-0.5 pr-1">{mins.map((x) => { const dis = !okT(+h * 60 + +x); return <button type="button" key={x} aria-pressed={x === m} disabled={dis} className={cell(x === m, dis)} onClick={() => { onChange(`${h}:${x}`); setOpen(false); }}>{x}</button>; })}</div></div>
+              <div ref={mRef} className="picker relative h-[38vh] md:h-52 overflow-y-auto grid gap-0.5 pr-1">{mins.map((x) => { const dis = !okT(+h * 60 + +x); return <button type="button" key={x} aria-pressed={x === m} disabled={dis} className={cell(x === m, dis)} onClick={() => { onChange(`${h}:${x}`); setOpen(false); }}>{x}</button>; })}</div></div>
           </div>
           {(min != null || max != null) && <p className="text-[11px] text-zinc-500 px-1 pt-2">{max != null && min == null ? `Até ${hhmm(max)} (agora)` : min != null && max == null ? `A partir de ${hhmm(min)}` : `Entre ${hhmm(lo)} e ${hhmm(hi)}`}</p>}
-          <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => setOpen(false)}>Pronto</button>
-        </div>,
+          <button type="button" className="mt-2 w-full h-11 md:h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => setOpen(false)}>Pronto</button>
+        </div></>,
         document.body
       )}
     </div>
@@ -695,10 +695,15 @@ function usePopover(W, H) {
   }, [open]);
   return { open, setOpen, pos, ref, btnRef, popRef };
 }
-const pickCell = (on, dis) => `h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
+const PICK_SHEET = 'fixed inset-x-0 bottom-0 z-[90] rounded-t-2xl border-t border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 px-4 pt-2 sheet-up';
+const pickBox = (mob, pos, cls) => (mob ? { style: { paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }, className: PICK_SHEET } : { style: { position: 'fixed', ...pos }, className: cls });
+const PickHandle = () => <div className="flex justify-center pb-2" aria-hidden="true"><span className="w-10 h-1.5 rounded-full bg-white/20" /></div>;
+const PickBackdrop = () => <div className="fixed inset-0 z-[89] bg-black/50" aria-hidden="true" />;
+const pickCell = (on, dis) => `h-11 md:h-9 rounded-lg text-sm tabular-nums ${on ? 'bg-[#9f8fff] text-zinc-950 font-medium' : dis ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-300 hover:bg-white/[0.06]'}`;
 const centerPicked = (refs) => refs.forEach((r) => { const c = r.current, el = c && c.querySelector('[aria-pressed="true"]'); if (el) c.scrollTop = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2; });
 // Duração (horas + minutos): mesmo visual do seletor de horário, com todas as horas e minutos e campo para digitar.
 function DurField({ value, onChange, label, min = 0, className = '' }) {
+  const mob = useMobile();
   const MAX = 23 * 60 + 59;
   const v = Math.max(0, Math.round(value || 0)), h = Math.floor(v / 60), m = v % 60;
   const P = usePopover(240, 330), hRef = useRef(null), mRef = useRef(null);
@@ -713,7 +718,7 @@ function DurField({ value, onChange, label, min = 0, className = '' }) {
       <button ref={P.btnRef} type="button" aria-haspopup="dialog" aria-expanded={P.open} aria-label={`${label}: ${fmt}`} onClick={() => P.setOpen(!P.open)}
         className={inp + ' flex items-center justify-between text-left ' + className.split(' ').filter((c) => !c.startsWith('mt-')).join(' ')}><span className="tabular-nums">{fmt}</span><Ic n="Timer" className="w-4 h-4 text-zinc-500" /></button>
       {P.open && P.pos && ReactDOM.createPortal(
-        <div ref={P.popRef} role="dialog" aria-label={label} style={{ position: 'fixed', ...P.pos }} className="z-[90] w-60 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+        <>{mob && <PickBackdrop />}<div ref={P.popRef} role="dialog" aria-label={label} {...pickBox(mob, P.pos, "z-[90] w-60 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2")}>{mob && <PickHandle />}
           <div className="grid grid-cols-2 gap-2">
             <div><p className="text-xs text-zinc-500 px-1 pb-1">Horas</p>
               <div ref={hRef} className="picker relative h-48 overflow-y-auto grid gap-0.5 pr-1">{hours.map((x) => { const dis = x * 60 + 59 < min; return <button type="button" key={x} aria-pressed={x === h} disabled={dis} className={pickCell(x === h, dis)} onClick={() => set(x, x * 60 + m < min ? min - x * 60 : m)}>{x}h</button>; })}</div></div>
@@ -722,13 +727,14 @@ function DurField({ value, onChange, label, min = 0, className = '' }) {
           </div>
           <label className="flex items-center gap-2 px-1 pt-2 text-xs text-zinc-500">Ou digite<input type="number" inputMode="numeric" min={min} max={MAX} value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={() => { const n = Math.round(Number(txt)); if (Number.isFinite(n) && n >= 0) { const c = Math.min(MAX, Math.max(min, n)); onChange(c); setTxt(String(c)); } else setTxt(String(v)); }}
             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-20 h-8 rounded-md bg-zinc-950 border border-white/10 px-2 text-sm text-zinc-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-[#9f8fff]/60" aria-label={`${label} em minutos`} />min</label>
-          <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
-        </div>, document.body)}
+          <button type="button" className="mt-2 w-full h-11 md:h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
+        </div></>, document.body)}
     </div>
   );
 }
 // "Ver como se fosse": hora real ou qualquer hora cheia do dia.
 function SimTimeField({ value, onChange }) {
+  const mob = useMobile();
   const P = usePopover(224, 320), lRef = useRef(null);
   useEffect(() => { if (P.open && P.pos) centerPicked([lRef]); }, [P.open, !!P.pos]);
   const opts = [null, ...Array.from({ length: 24 }, (_, i) => i * 60)];
@@ -737,10 +743,10 @@ function SimTimeField({ value, onChange }) {
       <button ref={P.btnRef} id="sim" type="button" aria-haspopup="dialog" aria-expanded={P.open} aria-label={`Ver como se fosse: ${value == null ? 'agora (hora real)' : hhmm(value)}`} onClick={() => P.setOpen(!P.open)}
         className={inp + ' h-10 flex items-center justify-between text-left'}><span className="tabular-nums">{value == null ? 'Agora (hora real)' : hhmm(value)}</span><Ic n="Clock" className="w-4 h-4 text-zinc-500" /></button>
       {P.open && P.pos && ReactDOM.createPortal(
-        <div ref={P.popRef} role="dialog" aria-label="Ver como se fosse" style={{ position: 'fixed', ...P.pos }} className="z-[90] w-56 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
+        <>{mob && <PickBackdrop />}<div ref={P.popRef} role="dialog" aria-label="Ver como se fosse" {...pickBox(mob, P.pos, "z-[90] w-56 pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2")}>{mob && <PickHandle />}
           <div ref={lRef} className="picker relative h-60 overflow-y-auto grid grid-cols-2 gap-0.5 pr-1">{opts.map((x) => <button type="button" key={String(x)} aria-pressed={x === value} className={pickCell(x === value) + (x == null ? ' col-span-2' : '')} onClick={() => { onChange(x); P.setOpen(false); }}>{x == null ? 'Agora (hora real)' : hhmm(x)}</button>)}</div>
-          <button type="button" className="mt-2 w-full h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
-        </div>, document.body)}
+          <button type="button" className="mt-2 w-full h-11 md:h-9 rounded-lg text-sm text-zinc-400 hover:bg-white/[0.05]" onClick={() => P.setOpen(false)}>Pronto</button>
+        </div></>, document.body)}
     </div>
   );
 }
@@ -795,8 +801,9 @@ function TopBar({ s, en, setTab, act, bell }) {
           <span className="text-xs text-zinc-500 tabular-nums">social {so.now}%</span>
         </div>
       </div>
+      <InstallButton />
       {bell}
-      <button onClick={act.openAccount} aria-label="Conta" title="Conta" className="md:hidden w-9 h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 text-sm font-medium">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-4 h-4" />}</button>
+      <button onClick={act.openAccount} aria-label="Conta" title="Conta" className="md:hidden w-11 h-11 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 text-sm font-medium">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-4 h-4" />}</button>
       <button onClick={() => act.setUi({ lowStim: !s.ui.lowStim })} aria-pressed={s.ui.lowStim} title="Modo baixo estímulo" aria-label="Modo baixo estímulo" className={`w-9 h-9 grid place-items-center rounded-full press ${s.ui.lowStim ? 'bg-[#9f8fff]/20 text-[#cdc4ff]' : 'bg-white/[0.05] text-zinc-400 hover:bg-white/[0.08]'}`}><Ic n="EyeOff" /></button>
       <button onClick={() => setTab('agora')} className="flex items-center gap-1.5 px-3 h-9 rounded-full bg-white/[0.05] text-sm text-zinc-300 hover:bg-white/[0.08]" title={`Melhor marca: ${st.best} dias`}>
         <Ic n="Flame" className="w-4 h-4 text-[#ffc24d] flame" />{st.count === 0 && st.best === 0 ? 'Começando' : alive ? `${st.count} ${st.count === 1 ? 'dia' : 'dias'}` : 'Recomeço'}{s.keptDays[s.day] ? <Ic n="Check" className="w-3.5 h-3.5 text-[#2ee8c4]" /> : null}{s.today.survival ? ' · protegida' : ''}{vacationOn(s, s.day) ? <span className="text-[#2ee8c4]"> · em pausa</span> : null}
@@ -918,6 +925,7 @@ function StreakMini({ s }) {
 
 const NOTICE_T = { pulse: 'como você está', welcome: 'boas-vindas', check: 'check-in', hyper: 'hiperfoco', leave: 'saída', meal: 'refeição', wind: 'desacelerar', confirm: 'confirmar bloco', pause: 'pausa', mode: 'reajuste', med: 'remédio', news: 'mudanças', adj: 'reajuste feito', sun: 'revisão' };
 function Agora({ s, up, act, en, timer, setTab, openFocus, openWeekly, openComp }) {
+  const [quick, setQuick] = useState(null);
   const [runR, setRunR] = useState(null);
   const [stepFor, setStepFor] = useState(null);
   const [moreN, setMoreN] = useState(false);
@@ -1070,11 +1078,12 @@ function Agora({ s, up, act, en, timer, setTab, openFocus, openWeekly, openComp 
         {next.length > 0 && (
           <div className="px-1 space-y-1.5">
             <p className="text-sm text-zinc-500">Depois disso</p>
-            {next.map((it) => <p key={it.id} className="text-sm text-zinc-300 flex gap-3"><span className="text-zinc-500 tabular-nums w-11">{hhmm(it.start)}</span>{itemTitle(s, it)}{it.ver === 'min' ? <span className="text-[#ffc24d]">· mínimo</span> : null}</p>)}
+            {next.map((it) => <SwipeRow key={it.id} onRight={() => act.swipeDone(it)} onLeft={() => setQuick(it)} leftLabel="Adiar / trocar"><p className="text-sm text-zinc-300 flex gap-3 min-h-[44px] md:min-h-0 items-center md:items-start bg-[#0b0c0f] md:bg-transparent"><span className="text-zinc-500 tabular-nums w-11">{hhmm(it.start)}</span>{itemTitle(s, it)}{it.ver === 'min' ? <span className="text-[#ffc24d]">· mínimo</span> : null}</p></SwipeRow>)}
           </div>
         )}
       </div>
       {runR && <RoutineRunner s={s} rid={runR} act={act} onClose={() => setRunR(null)} />}
+      {quick && <QuickItemSheet s={s} it={quick} act={act} onClose={() => setQuick(null)} />}
       <aside className="space-y-3" data-tour="cuidados">
         <StreakMini s={s} />
         <AsideTabs s={s} act={act}>{(tab) => <>
@@ -2234,6 +2243,103 @@ function ItemDetail({ s, it, act, onClose }) {
     </div>
   );
 }
+// ---------- celular: sheets, gestos e vibração ----------
+const useMobile = () => !useWide('(min-width: 768px)');
+const lowStimOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('low-stim');
+const haptic = (ms = 10) => { try { if (!lowStimOn() && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+// Deslize horizontal (troca de dia/mês). Ignora quando o gesto é mais vertical (rolagem).
+function swipeX(onLeft, onRight, min = 60) {
+  let x0 = null, y0 = null;
+  return {
+    onTouchStart: (e) => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; },
+    onTouchEnd: (e) => { if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null; if (Math.abs(dx) > min && Math.abs(dx) > Math.abs(dy) * 1.6) { haptic(8); (dx < 0 ? onLeft : onRight)(); } },
+  };
+}
+// Bottom sheet no celular (alça + arrastar para baixo fecha); modal centralizado no computador.
+function Sheet({ onClose, label, children, wide }) {
+  const mobile = useMobile(), [dy, setDy0] = useState(0), st = useRef(null), panel = useRef(null), dyR = useRef(0);
+  const setDy = (v) => { dyR.current = v; setDy0(v); };
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
+  const ts = (e) => { const fromHandle = !!e.target.closest('[data-handle]'); st.current = fromHandle || (panel.current && panel.current.scrollTop <= 0) ? e.touches[0].clientY : null; };
+  const tm = (e) => { if (st.current == null) return; const d = e.touches[0].clientY - st.current; if (d > 0) setDy(d); };
+  const te = () => { if (dyR.current > 110) { haptic(); onClose(); } setDy(0); st.current = null; };
+  return ReactDOM.createPortal(
+    <div className={`fixed inset-0 z-[70] flex ${mobile ? 'items-end' : 'items-center justify-center p-4'}`} role="dialog" aria-modal="true" aria-label={label}>
+      <button className="absolute inset-0 bg-black/55 backdrop-blur-[2px] cursor-default" aria-label="Fechar" tabIndex={-1} onClick={onClose} style={{ opacity: mobile ? Math.max(0.2, 1 - dy / 400) : 1 }} />
+      <div ref={panel} onTouchStart={mobile ? ts : undefined} onTouchMove={mobile ? tm : undefined} onTouchEnd={mobile ? te : undefined}
+        className={mobile ? 'relative w-full max-h-[92vh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-white/10 bg-zinc-950 sheet-up no-scrollbar' : `relative w-full ${wide ? 'max-w-lg' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 pop-in`}
+        style={mobile ? { transform: dy ? `translateY(${dy}px)` : undefined, transition: dy ? 'none' : 'transform .2s', paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
+        {mobile && <div data-handle className="sticky top-0 z-10 pt-2.5 pb-1.5 flex justify-center bg-zinc-950/95 backdrop-blur" aria-hidden="true"><span className="w-10 h-1.5 rounded-full bg-white/20" /></div>}
+        {children}
+      </div>
+    </div>, document.body);
+}
+// Cartão com gesto: direita = feito, esquerda = adiar / trocar. Só reage a toque.
+function SwipeRow({ onRight, onLeft, rightLabel = 'Feito', leftLabel = 'Adiar', children, disabled }) {
+  const [dx, setDx0] = useState(0), st = useRef(null), fired = useRef(false), dxR = useRef(0);
+  const setDx = (v) => { dxR.current = v; setDx0(v); };
+  if (disabled) return children;
+  const ts = (e) => { const t = e.touches[0]; st.current = { x: t.clientX, y: t.clientY, lock: null }; fired.current = false; };
+  const tm = (e) => { const o = st.current; if (!o) return; const t = e.touches[0], ddx = t.clientX - o.x, ddy = t.clientY - o.y;
+    if (o.lock == null && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) o.lock = Math.abs(ddx) > Math.abs(ddy) * 1.3 ? 'x' : 'y';
+    if (o.lock !== 'x') return; const v = Math.max(-130, Math.min(130, ddx)); if (!fired.current && Math.abs(v) >= 80) { fired.current = true; haptic(12); } setDx(v); };
+  const te = () => { const v = dxR.current; setDx(0); st.current = null; if (v >= 80 && onRight) onRight(); else if (v <= -80 && onLeft) onLeft(); };
+  return (
+    <div className="relative rounded-lg overflow-hidden" onTouchStart={ts} onTouchMove={tm} onTouchEnd={te} onTouchCancel={() => { setDx(0); st.current = null; }}>
+      {dx !== 0 && <div className={`absolute inset-0 flex items-center px-4 text-sm font-medium ${dx > 0 ? 'justify-start bg-[#2ee8c4]/20 text-[#7ff0d8]' : 'justify-end bg-[#9f8fff]/20 text-[#cdc4ff]'}`} aria-hidden="true">
+        <span className="flex items-center gap-1.5" style={{ opacity: Math.min(1, Math.abs(dx) / 80) }}><Ic n={dx > 0 ? 'Check' : 'Clock'} className="w-4 h-4" />{dx > 0 ? rightLabel : leftLabel}</span></div>}
+      <div style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? 'none' : 'transform .18s' }}>{children}</div>
+    </div>);
+}
+// Ações do deslize para a esquerda.
+function QuickItemSheet({ s, it, act, onClose }) {
+  const r = refOf(s, it); if (!r) return null;
+  const tomorrow = s.plan.days.includes(it.day + 1) ? it.day + 1 : null;
+  const go = (fn) => () => { fn(); haptic(); onClose(); };
+  return (
+    <Sheet onClose={onClose} label={`Ações para ${r.title}`}>
+      <div className="p-5 pt-2 space-y-2">
+        <p className="text-zinc-50 font-medium">{r.title}</p><p className="text-xs text-zinc-500 pb-1">{hhmm(it.start)}–{hhmm(it.start + it.dur)}</p>
+        {tomorrow != null && <button className={btnG + ' w-full justify-start'} onClick={go(() => act.moveTo(it, tomorrow))}><Ic n="CalendarArrowUp" />Adiar para amanhã</button>}
+        <button className={btnG + ' w-full justify-start'} onClick={go(() => act.travou(it))}><Ic n="LifeBuoy" />Trocar por algo mais leve</button>
+        <button className={btnG + ' w-full justify-start'} onClick={go(() => act.toggleDone(it))}><Ic n="Check" />Marcar como feito</button>
+        <button className={btnL + ' w-full justify-center'} onClick={onClose}>Cancelar</button>
+      </div>
+    </Sheet>);
+}
+// Instalar no celular / computador.
+function InstallSheet({ onClose }) {
+  useCloud();
+  const ios = Pwa.ios, phone = Pwa.phone, url = 'https://jullross.github.io/questday/';
+  const step = (n, t, ic) => <li className="flex items-start gap-3"><span className="w-8 h-8 rounded-full grid place-items-center bg-[#9f8fff]/15 text-[#cdc4ff] text-sm font-semibold shrink-0">{n}</span><span className="flex-1 pt-1 text-sm text-zinc-200">{t}</span>{ic && <span className="w-9 h-9 rounded-lg grid place-items-center bg-white/[0.06] text-zinc-300 shrink-0"><Ic n={ic} className="w-4 h-4" /></span>}</li>;
+  return (
+    <Sheet onClose={onClose} label="Instalar o QuestDay" wide>
+      <div className="p-5 pt-2 sm:pt-5 space-y-4">
+        <div className="flex items-center gap-3"><img src="icons/icon-192.png" alt="" className="w-12 h-12 rounded-xl" /><div className="flex-1"><p className="text-zinc-50 font-medium">Instalar o QuestDay</p><p className="text-xs text-zinc-500">Ícone na tela, abre em tela cheia e funciona offline.</p></div>
+          <button className="w-9 h-9 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
+        {ios ? <ol className="space-y-3">{step(1, <>Toque em <b className="font-medium">Compartilhar</b>, o quadrado com a seta para cima, na barra do Safari.</>, 'Upload')}{step(2, <>Role a lista e toque em <b className="font-medium">Adicionar à Tela de Início</b>.</>, 'Plus')}{step(3, <>Confirme em <b className="font-medium">Adicionar</b>. O QuestDay aparece com o ícone da Lume.</>, 'Check')}</ol>
+          : phone ? <ol className="space-y-3">{step(1, <>Toque no menu <b className="font-medium">⋮</b> do navegador, no canto de cima.</>, 'SlidersHorizontal')}{step(2, <>Escolha <b className="font-medium">Instalar app</b> ou <b className="font-medium">Adicionar à tela inicial</b>.</>, 'Download')}{step(3, <>Confirme. O QuestDay aparece com o ícone da Lume.</>, 'Check')}</ol>
+          : <div className="space-y-4">
+              <div className="rounded-xl border border-white/10 p-4 space-y-2"><p className="text-sm text-zinc-100 font-medium flex items-center gap-2"><Ic n="Download" className="w-4 h-4" />Neste computador</p>
+                {Pwa.canInstall ? <button className={btnP + ' w-full'} onClick={async () => { await Pwa.install(); onClose(); }}>Instalar como app</button> : <p className="text-xs text-zinc-400">No Chrome ou no Edge, clique no ícone de instalar na barra de endereço, ou no menu ⋮ → Instalar QuestDay.</p>}</div>
+              <div className="rounded-xl border border-white/10 p-4 flex items-center gap-4"><img src="icons/qr-questday.svg" alt="QR code com o link do QuestDay" className="w-32 h-32 rounded-lg bg-white p-1 shrink-0" />
+                <div className="space-y-1"><p className="text-sm text-zinc-100 font-medium flex items-center gap-2"><Ic n="Smartphone" className="w-4 h-4" />No celular</p><p className="text-xs text-zinc-400">Aponte a câmera para o código, abra o link e instale por lá.</p><p className="text-[11px] text-zinc-500 break-all">{url}</p></div></div>
+            </div>}
+      </div>
+    </Sheet>);
+}
+function InstallButton({ variant = 'icon', className = '' }) {
+  useCloud();
+  const [open, setOpen] = useState(false);
+  if (Pwa.installed) return null;
+  const click = async () => { if (Pwa.canInstall) { haptic(); const ok = await Pwa.install(); if (ok) return; } setOpen(true); };
+  return <>
+    {variant === 'icon' ? <button onClick={click} aria-label="Baixar app: instalar no celular" title="Baixar app" className={'w-11 h-11 md:w-9 md:h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 hover:bg-white/[0.08] ' + className}><Ic n="Smartphone" className="w-4 h-4" /></button>
+      : variant === 'side' ? <button onClick={click} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] ' + className}><Ic n="Smartphone" className="w-5 h-5" /><span className="text-left"><span className="block text-zinc-200">Baixar app</span><span className="block text-[11px] text-zinc-500">Instalar no celular</span></span></button>
+      : <button onClick={click} className={btnG + ' ' + className}><Ic n="Smartphone" />Baixar app no celular</button>}
+    {open && <InstallSheet onClose={() => setOpen(false)} />}
+  </>;
+}
 function useWide(q) {
   const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(q) : null;
   const [w, setW] = useState(mq ? mq.matches : false);
@@ -2305,6 +2411,7 @@ function UnplacedCard({ s, act, backlog }) {
   );
 }
 function DayList({ s, d, sel, setSel, act }) {
+  const [quick, setQuick] = useState(null);
   const fx = fixedAll(s, d).filter((f) => !(f.log && f.log.ferias));
   const its = s.plan.items.filter((it) => it.day === d && it.status !== 'backlog' && it.status !== 'removido' && refOf(s, it));
   const tripIds = new Set(fx.filter((f) => f.type === 'trajeto' && !f.skip).map((f) => f.id));
@@ -2315,8 +2422,9 @@ function DayList({ s, d, sel, setSel, act }) {
   if (!rows.length) return <p className="text-sm text-zinc-600 px-1 py-3">Nada planejado.</p>;
   return (
     <div className="space-y-1.5">
+      {quick && <QuickItemSheet s={s} it={quick} act={act} onClose={() => setQuick(null)} />}
       {rows.map((row, ri) => {
-        if (row.it) return <ItemCard key={row.it.id} idx={ri} s={s} it={row.it} sel={sel === row.it.id} onClick={() => pick(row.it)} onToggle={() => act.toggleDone(row.it)} />;
+        if (row.it) return <SwipeRow key={row.it.id} disabled={row.it.status !== 'pendente'} onRight={() => act.swipeDone(row.it)} onLeft={() => setQuick(row.it)} leftLabel="Adiar / trocar"><ItemCard idx={ri} s={s} it={row.it} sel={sel === row.it.id} onClick={() => pick(row.it)} onToggle={() => act.toggleDone(row.it)} /></SwipeRow>;
         const f = row.f;
         const on = sel === `fx|${d}|${f.id}`;
         if (f.skip) return (
@@ -2327,7 +2435,7 @@ function DayList({ s, d, sel, setSel, act }) {
           return (
             <div key={f.id} className={`rounded-lg border trip-stripes p-1.5 space-y-1 ${on ? 'border-[#9f8fff]/70' : 'border-[#9f8fff]/25'}`}>
               <button onClick={() => fsel(f)} aria-pressed={on} aria-label={`${f.title}: confirmar horário`} className="w-full text-left flex items-start gap-1.5 px-1 py-0.5 text-xs rounded hover:bg-white/[0.04]"><Ic n="Bus" className="w-3.5 h-3.5 shrink-0 mt-px text-[#cdc4ff]" /><span className="flex-1 min-w-0 space-y-0.5"><span className="block font-medium text-[#cdc4ff] truncate">{f.title}</span><span className="block tabular-nums text-zinc-500">{f.start}–{f.end}</span><Badge f={f} /></span></button>
-              {inner.length ? inner.map((it) => <ItemCard key={it.id} s={s} it={it} nested sel={sel === it.id} onClick={() => pick(it)} onToggle={() => act.toggleDone(it)} />) : <p className="px-1 pb-0.5 text-xs text-zinc-500">Livre: descansar ou ouvir música.</p>}
+              {inner.length ? inner.map((it) => <SwipeRow key={it.id} disabled={it.status !== 'pendente'} onRight={() => act.swipeDone(it)} onLeft={() => setQuick(it)} leftLabel="Adiar / trocar"><ItemCard s={s} it={it} nested sel={sel === it.id} onClick={() => pick(it)} onToggle={() => act.toggleDone(it)} /></SwipeRow>) : <p className="px-1 pb-0.5 text-xs text-zinc-500">Livre: descansar ou ouvir música.</p>}
             </div>
           );
         }
@@ -2386,7 +2494,7 @@ function MonthCal({ s, act }) {
         <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-300 hover:bg-white/[0.06] press" aria-label="Próximo mês" onClick={() => go(1)}><Ic n="ChevronRight" className="w-4 h-4" /></button>
       </div>
       <div className="grid grid-cols-7 text-center text-[11px] uppercase tracking-wide text-zinc-500">{SEMANA.map((w) => <span key={w} className="py-1">{DIAS[w]}</span>)}</div>
-      <div className="grid grid-cols-7 gap-1 sm:gap-1.5" role="grid" aria-label={`Calendário de ${MESES_L[ym.m]} de ${ym.y}`}>
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5" {...swipeX(() => go(1), () => go(-1))} role="grid" aria-label={`Calendário de ${MESES_L[ym.m]} de ${ym.y}`}>
         {cells.map((d) => {
           const inM = dateOf(d).getUTCMonth() === ym.m, past = d < s.day, ag = dayAgenda(s, d), hol = holidayOn(s, d), vac = vacationOn(s, d);
           const ev = ag.filter((x) => x.kind === 'evento' || x.kind === 'trabalho'), rest = ag.length - ev.length;
@@ -2414,9 +2522,9 @@ function DayModal({ s, act, d, onClose }) {
   useEffect(() => { const k = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
   const groups = [['Compromissos', ag.filter((x) => x.kind === 'evento' || x.kind === 'trabalho')], ['Tarefas', ag.filter((x) => x.kind === 'tarefa')], ['Casa e cuidado', ag.filter((x) => x.kind === 'cuidado')]].filter(([, xs]) => xs.length);
   const draft = { title: '', recurring: false, day: d, days: [], start: d === s.day ? hhmm(Math.min(1380, Math.ceil((nowRef(s) + 30) / 30) * 30)) : '09:00', end: d === s.day ? hhmm(Math.min(1439, Math.ceil((nowRef(s) + 30) / 30) * 30 + 60)) : '10:00' };
-  return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-end sm:place-items-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="dm-t" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4 pop-in">
+  return (
+    <Sheet onClose={onClose} label={fmtDia(d)}>
+      <div className="p-5 pt-2 sm:pt-5 space-y-4">
         <div className="flex items-start gap-3"><div className="flex-1"><h2 id="dm-t" className="text-lg font-semibold text-zinc-50 capitalize">{fmtDia(d)}</h2>
           <p className="text-xs text-zinc-500">{d === s.day ? 'Hoje' : d === s.day + 1 ? 'Amanhã' : d < s.day ? 'Já passou' : `Daqui a ${d - s.day} dias`}{hol ? ` · ${hol.label}` : ''}{vac ? ` · ${vac.label} (rotina em pausa)` : ''}</p></div>
           <button className="w-9 h-9 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
@@ -2428,10 +2536,10 @@ function DayModal({ s, act, d, onClose }) {
         {canAdd ? (adding ? <EventCard s={s} draft={draft} onApply={(f) => { act.addEvent(f); setAdding(false); }} /> : <button className={btnP + ' w-full'} onClick={() => setAdding(true)}><Ic n="Plus" />Adicionar neste dia</button>)
           : <p className="text-xs text-zinc-600">Não dá para marcar compromissos em dias que já passaram.</p>}
       </div>
-    </div>, document.body);
+    </Sheet>);
 }
 function SemanaGrid({ s, act, en, weekly, setWeekly }) {
-  const [sel, setSel] = useState(null);
+  const [sel, setSel] = useState(null), mobile = useMobile();
   const gridRef = useRef(null);
   useEffect(() => { const g = gridRef.current; if (!g) return; const i = s.plan.days.indexOf(s.day); const el = g.children[i]; if (el && i > 1) g.scrollLeft = el.offsetLeft - g.offsetLeft - 8; }, []);
   const [over, setOver] = useState(null);
@@ -2470,13 +2578,13 @@ function SemanaGrid({ s, act, en, weekly, setWeekly }) {
       </div>
       {s.adaptNote && <AdaptNote s={s} act={act} />}
       {s.today.checkedIn && mode !== 'normal' && mode !== 'descansada' && !s.today.adjusted && <p className="text-sm text-[#ffc24d]">Hoje é {MODOS[mode].t.toLowerCase()}. “Reajustar meu dia” reduz e redistribui o que ficou pesado.</p>}
-      {selIt && <ItemDetail s={s} it={selIt} act={act} onClose={() => setSel(null)} />}
-      {selFx && <FixedCheck key={sel} s={s} day={selFx.day} f={selFx.f} act={act} onClose={() => setSel(null)} />}
+      {selIt && (mobile ? <Sheet onClose={() => setSel(null)} label="Detalhes"><div className="p-3 pt-1"><ItemDetail s={s} it={selIt} act={act} onClose={() => setSel(null)} /></div></Sheet> : <ItemDetail s={s} it={selIt} act={act} onClose={() => setSel(null)} />)}
+      {selFx && (mobile ? <Sheet onClose={() => setSel(null)} label="Confirmar horário"><div className="p-3 pt-1"><FixedCheck key={sel} s={s} day={selFx.day} f={selFx.f} act={act} onClose={() => setSel(null)} /></div></Sheet> : <FixedCheck key={sel} s={s} day={selFx.day} f={selFx.f} act={act} onClose={() => setSel(null)} />)}
       <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar lg:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
         {shown.map((d) => { const st = stat(d); return <button key={d} onClick={() => setDSel(d)} aria-pressed={dSel === d} className={`shrink-0 w-14 sm:flex-1 sm:min-w-[56px] h-16 rounded-xl flex flex-col items-center justify-center text-sm ${dSel === d ? 'bg-[#9f8fff] text-zinc-950 font-medium' : d === s.day ? 'border border-[#9f8fff]/60 text-zinc-100' : 'text-zinc-300 bg-white/[0.04]'}`}>
           <span className="text-xs">{DIAS[weekdayOf(d)]}</span>{dateOf(d).getUTCDate()}<span className={`text-[10px] ${dSel === d ? 'text-zinc-800' : vacationOn(s, d) ? 'text-[#2ee8c4]' : 'text-zinc-500'}`}>{vacationOn(s, d) ? 'pausa' : st.n ? `${st.n} itens` : 'livre'}</span></button>; })}
       </div>
-      <div className="lg:hidden space-y-2 max-w-2xl"><DayList s={s} d={dSel} sel={sel} setSel={setSel} act={act} />{dSel >= s.day && <AddToDay s={s} d={dSel} act={act} />}</div>
+      <div className="lg:hidden space-y-2 max-w-2xl" {...swipeX(() => { const i = shown.indexOf(dSel); if (i >= 0 && i < shown.length - 1) setDSel(shown[i + 1]); }, () => { const i = shown.indexOf(dSel); if (i > 0) setDSel(shown[i - 1]); })}><DayList s={s} d={dSel} sel={sel} setSel={setSel} act={act} />{dSel >= s.day && <AddToDay s={s} d={dSel} act={act} />}</div>
       <div className="hidden lg:max-[1599px]:flex justify-end gap-1 -mb-2">
         <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5" aria-label="Dias anteriores" onClick={() => gridRef.current && gridRef.current.scrollBy({ left: -230, behavior: 'smooth' })}><Ic n="ChevronLeft" className="w-4 h-4" /></button>
         <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5" aria-label="Próximos dias" onClick={() => gridRef.current && gridRef.current.scrollBy({ left: 230, behavior: 'smooth' })}><Ic n="ChevronRight" className="w-4 h-4" /></button>
@@ -2749,12 +2857,13 @@ function ContaSection({ s, act }) {
 
 function AccountModal({ s, act, onClose, goSettings }) {
   useCloud();
+  const [reset, setReset] = useState(false), [rerr, setRerr] = useState(null);
   const u = Cloud.user, [del, setDel] = useState(false), [typed, setTyped] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState(null);
   useEffect(() => { const k = (e) => { if (e.key === 'Escape') (del ? setDel(false) : onClose()); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [del]);
   const doDelete = async () => { setBusy(true); setErr(null); try { await act.deleteAccount(); } catch (e) { setErr('Não consegui excluir agora. Confira a internet e tente de novo.'); setBusy(false); } };
-  return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[70] grid place-items-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="acct-t" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 sm:p-6 space-y-5 pop-in">
+  return (
+    <Sheet onClose={() => (del ? setDel(false) : onClose())} label="Conta">
+      <div className="p-5 pt-2 sm:p-6 space-y-5">
         <div className="flex items-center justify-between"><h2 id="acct-t" className="text-lg font-semibold text-zinc-50">Conta</h2><button className="w-9 h-9 grid place-items-center rounded-lg text-zinc-500 hover:bg-white/5" aria-label="Fechar" onClick={onClose}><Ic n="X" className="w-4 h-4" /></button></div>
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-wide text-zinc-500">Sessão</p>
@@ -2765,6 +2874,14 @@ function AccountModal({ s, act, onClose, goSettings }) {
           <button className={btnL + ' -ml-2'} onClick={goSettings}><Ic n="SlidersHorizontal" className="w-3.5 h-3.5" />Lembretes, celular e Google Agenda</button>
         </section>
         {u && <section className="space-y-2 border-t border-white/[0.06] pt-4"><button className={btnG + ' w-full'} onClick={act.logout}><Ic n="DoorOpen" />Sair da conta</button><p className="text-xs text-zinc-500">Seus dados continuam salvos na conta. Você volta para a tela inicial.</p></section>}
+        <section className="space-y-2 border-t border-white/[0.06] pt-4">
+          <p className="text-sm text-zinc-100 font-medium">Recomeçar do zero</p>
+          <p className="text-xs text-zinc-500">{u ? 'Apaga sua rotina, tarefas, histórico e ofensiva e abre a montagem da rotina de novo. A conta continua, e a versão atual fica guardada em "Versões anteriores".' : s.demo ? 'Apaga os dados de exemplo e volta para a tela inicial.' : 'Apaga tudo deste aparelho e abre a montagem da rotina de novo.'}</p>
+          {reset ? <div className="rounded-xl border border-[#ffc24d]/30 bg-[#ffc24d]/[0.06] p-3 space-y-2"><p className="text-sm text-zinc-200">Tem certeza? Sua rotina atual sai da tela agora.</p>
+              {rerr && <p className="text-xs text-[#ffc24d]" role="status">{rerr}</p>}
+              <div className="flex gap-2"><button className={btnG + ' flex-1'} disabled={busy} onClick={() => setReset(false)}>Cancelar</button><button className={btnP + ' flex-1'} disabled={busy} onClick={async () => { setBusy(true); setRerr(null); try { await act.resetAll(); } catch (e) { setRerr('Não consegui recomeçar agora. Confira a internet e tente de novo.'); setBusy(false); } }}><Ic n="RotateCcw" />{busy ? 'Recomeçando…' : 'Recomeçar'}</button></div></div>
+            : <button className={btnG + ' w-full'} onClick={() => setReset(true)}><Ic n="RotateCcw" />Recomeçar do zero</button>}
+        </section>
         {u && <section className="space-y-3 rounded-xl border border-[#ff5c7a]/30 bg-[#ff5c7a]/[0.05] p-4">
           <p className="text-sm font-medium text-[#ff8da1]">Zona de perigo</p>
           <p className="text-xs text-zinc-400">Apaga para sempre sua rotina, histórico, lembretes e versões salvas do QuestDay. Não dá para desfazer.</p>
@@ -2781,7 +2898,7 @@ function AccountModal({ s, act, onClose, goSettings }) {
           <div className="flex gap-2 justify-end"><button className={btnG} onClick={() => setDel(false)} disabled={busy}>Cancelar</button>
             <button className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl bg-[#ff5c7a] text-zinc-950 font-medium disabled:opacity-40 press" disabled={typed.trim().toUpperCase() !== 'EXCLUIR' || busy} onClick={doDelete}>{busy ? 'Excluindo…' : 'Excluir para sempre'}</button></div>
         </div></div>}
-    </div>, document.body);
+    </Sheet>);
 }
 
 const TOUR = [
@@ -2860,7 +2977,7 @@ function Bell({ hist, onOpen }) {
   useEffect(() => { if (P.open) onOpen(); }, [P.open]);
   return (
     <div className="relative" ref={P.ref}>
-      <button ref={P.btnRef} onClick={() => P.setOpen(!P.open)} aria-label={`Avisos de hoje${unread ? `, ${unread} novo${unread > 1 ? 's' : ''}` : ''}`} aria-haspopup="dialog" aria-expanded={P.open} className="relative w-9 h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 hover:bg-white/[0.08]">
+      <button ref={P.btnRef} onClick={() => P.setOpen(!P.open)} aria-label={`Avisos de hoje${unread ? `, ${unread} novo${unread > 1 ? 's' : ''}` : ''}`} aria-haspopup="dialog" aria-expanded={P.open} className="relative w-11 h-11 md:w-9 md:h-9 grid place-items-center rounded-full bg-white/[0.05] text-zinc-300 hover:bg-white/[0.08]">
         <Ic n="Bell" className="w-4 h-4" />{unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#ff6fb5] text-[10px] font-semibold text-zinc-950 grid place-items-center tabular-nums">{unread > 9 ? '9+' : unread}</span>}</button>
       {P.open && P.pos && ReactDOM.createPortal(
         <div ref={P.popRef} role="dialog" aria-label="Avisos de hoje" style={{ position: 'fixed', ...P.pos, left: Math.max(8, Math.min(P.pos.left, window.innerWidth - 308)) }} className="z-[90] w-[300px] max-h-[360px] overflow-y-auto pop-in rounded-xl border border-white/10 bg-zinc-900 shadow-2xl shadow-black/60 p-2">
@@ -3678,7 +3795,9 @@ function AddTaskCard({ s, draft, onApply, applied }) {
 const fitTa = (el) => { if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; };
 function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, act }) {
   const [text, setText] = useState('');
-  const [cfg, setCfg] = useState(false);
+  const [cfg, setCfg] = useState(false), [drag, setDrag0] = useState(0), dst = useRef(null), dragR = useRef(0);
+  const setDrag = (v) => { dragR.current = v; setDrag0(v); };
+  const dragH = { onTouchStart: (e) => { dst.current = e.touches[0].clientY; }, onTouchMove: (e) => { if (dst.current == null) return; const d = e.touches[0].clientY - dst.current; setDrag(d > 0 ? d : 0); }, onTouchEnd: () => { if (dragR.current > 110) { haptic(); onClose(); } setDrag(0); dst.current = null; } };
   useCloud();
   const aiOn = !!(s.ai && s.ai.on && s.ai.key) || (Cloud.status.aiReady === true && !(s.ai && s.ai.off));
   const [busy, setBusy] = useState(false);
@@ -3714,10 +3833,12 @@ function AssistantDrawer({ s, en, open, onClose, msgs, setMsgs, runOp, aiExec, a
   if (!open) return null;
   const chips = [['Adicionar algo rápido', 'add'], ['O que fazer agora?', null], ['Tô sem energia, me ajuda', null]];
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Assistente">
-      <button className="absolute inset-0 bg-black/55 backdrop-blur-[2px] cursor-default" aria-label="Fechar assistente" onClick={onClose} />
-      <div className="relative w-full md:w-[420px] h-full bg-[#0f1014] md:border-l border-white/[0.08] flex flex-col drawer-in">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06]">
+    <div className="fixed inset-0 z-50 flex items-end md:items-stretch justify-end" role="dialog" aria-modal="true" aria-label="Assistente">
+      <button className="absolute inset-0 bg-black/55 backdrop-blur-[2px] cursor-default" aria-label="Fechar assistente" onClick={onClose} style={{ opacity: Math.max(0.2, 1 - drag / 400) }} />
+      <div className="relative w-full md:w-[420px] h-[92vh] md:h-full bg-[#0f1014] rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-white/[0.08] flex flex-col sheet-up drawer-md"
+        style={{ transform: drag ? `translateY(${drag}px)` : undefined, transition: drag ? 'none' : 'transform .2s', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="md:hidden flex justify-center pt-2.5 pb-1" aria-hidden="true" {...dragH}><span className="w-10 h-1.5 rounded-full bg-white/20" /></div>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06]" {...dragH}>
           <Pet mood={mood} size={40} />
           <div className="flex-1"><p className="text-zinc-50 font-medium flex items-center gap-2">Lume <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${aiOn ? 'bg-[#2ee8c4]/15 text-[#7ff0d8]' : 'bg-white/[0.06] text-zinc-400'}`}>{aiOn ? 'IA ligada' : 'modo local'}</span></p><p className="text-xs text-zinc-500">{MOOD_TXT[mood]} · energia {en.total}%</p></div>
           <button className="w-10 h-10 grid place-items-center rounded-lg text-zinc-400 hover:bg-white/5" aria-label="Ajustes do Lume" aria-expanded={cfg} onClick={() => setCfg(!cfg)}><Ic n="Settings" /></button>
@@ -3770,7 +3891,7 @@ const TABS = [
   { id: 'agora', label: 'Agora', icon: 'Sun' },
   { id: 'semana', label: 'Semana', sub: 'Plano da IA', icon: 'CalendarRange' },
   { id: 'cuidar', label: 'Cuidar', icon: 'Heart' },
-  { id: 'cadastro', label: 'Minha Rotina', icon: 'SlidersHorizontal' },
+  { id: 'cadastro', label: 'Minha Rotina', short: 'Rotina', icon: 'SlidersHorizontal' },
   { id: 'progresso', label: 'Progresso', icon: 'ChartColumn' },
 ];
 function App({ initialTab, onRestart }) {
@@ -3779,7 +3900,20 @@ function App({ initialTab, onRestart }) {
   const [cadSec, setCadSec] = useState('tarefas');
   const setTab = (t, sec) => { if (sec) setCadSec(sec); setTab0(t); try { window.scrollTo({ top: 0 }); } catch (e) {} };
   const [toast, setToast] = useState(null);
-  const [acctOpen, setAcctOpen] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(false), [fab, setFab] = useState(false);
+  // Puxar para atualizar (celular): sincroniza e recalcula o dia.
+  const [pull, setPull0] = useState(0), [pulling, setPulling] = useState(false), pst = useRef(null), pullR = useRef(0);
+  const setPull = (v) => { pullR.current = v; setPull0(v); };
+  const refresh = async () => {
+    setPulling(true); haptic(12);
+    try { if (Cloud.user) { const d = await Cloud.newerRemote(); if (d && d.v === 4) setS(fromSaved(d)); else { await Cloud.pushNow(sRef.current); setS((x) => fromSaved(x)); } } else setS((x) => fromSaved(x)); } catch (e) {}
+    await new Promise((r) => setTimeout(r, 500)); setPulling(false); setPull(0); notify('Tudo em dia.');
+  };
+  const ptr = {
+    onTouchStart: (e) => { pst.current = window.scrollY <= 0 && !pulling && e.target.closest && e.target.closest('main') ? e.touches[0].clientY : null; },
+    onTouchMove: (e) => { if (pst.current == null) return; const d = e.touches[0].clientY - pst.current; if (d > 0 && window.scrollY <= 0) setPull(Math.min(110, d * 0.55)); else if (d < 0) { pst.current = null; setPull(0); } },
+    onTouchEnd: () => { if (pst.current == null) return; pst.current = null; if (pullR.current >= 64) refresh(); else setPull(0); },
+  };
   const [chatOpen, setChatOpen] = useState(false);
   const [focusIt, setFocusIt] = useState(null);
   const [weekly, setWeekly] = useState(false);
@@ -3808,7 +3942,7 @@ function App({ initialTab, onRestart }) {
     return () => { document.removeEventListener('visibilitychange', vis); window.removeEventListener('pagehide', hide); };
   }, []);
   useEffect(() => { const r = document.documentElement, ui = s.ui || {}; r.classList.toggle('low-stim', !!ui.lowStim); r.classList.toggle('light', ui.theme === 'light'); r.classList.toggle('font-legivel', ui.font === 'legivel'); r.classList.toggle('text-grande', ui.size === 'grande'); }, [s.ui]);
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 3000); return () => clearTimeout(id); }, [toast]);
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), toast.undo ? 6000 : 3000); return () => clearTimeout(id); }, [toast]);
   useEffect(() => { const ui = s.ui || {}, c = ui.theme === 'light' ? (ui.lowStim ? '#f4f1ea' : '#f7f7fa') : '#0b0c0f'; document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', c)); }, [s.ui && s.ui.theme, s.ui && s.ui.lowStim]);
   const running = !!(tm && tm.running);
   useEffect(() => {
@@ -3844,6 +3978,7 @@ function App({ initialTab, onRestart }) {
       up((x) => (x.today.started[it.id] ? x : earn({ ...x, today: { ...x.today, started: { ...x.today.started, [it.id]: true } } }, 2, 'Quebrou a inércia (timer)')));
     },
     done: (it) => {
+      haptic(15);
       const v = valueOf(s, it);
       up((x) => {
         const cyc0 = it.kind === 'cycle' ? x.cycles.find((c) => c.id === it.ref) : null;
@@ -4074,7 +4209,7 @@ function App({ initialTab, onRestart }) {
     },
     review: (k) => { up((x) => ({ ...x, reviews: { ...x.reviews, [x.day]: k } })); notify(k === 'dificil' ? 'Anotado. Amanhã eu começo mais leve.' : k === 'rendeu' ? 'Que bom! Anotado.' : 'Mínimo também conta. Anotado.'); },
     pauseDone: () => up((x) => badge({ ...x, today: { ...x.today, pause: false } }, 'pausa')),
-    water: (ml) => up((x) => ({ ...x, waterMl: { ...(x.waterMl || {}), [x.day]: clamp(((x.waterMl || {})[x.day] || 0) + ml, 0, 8000) } })),
+    water: (ml) => (haptic(ml > 0 ? 10 : 0), up((x) => ({ ...x, waterMl: { ...(x.waterMl || {}), [x.day]: clamp(((x.waterMl || {})[x.day] || 0) + ml, 0, 8000) } }))),
     med: (id) => up((x) => { const t = { ...(x.medsTaken[x.day] || {}) }; t[id] = !t[id]; const meds = x.careCfg.meds.map((m) => (m.id === id && m.stock != null ? { ...m, stock: Math.max(0, m.stock + (t[id] ? -(m.dose || 1) : (m.dose || 1))) } : m)); return { ...x, medsTaken: { ...x.medsTaken, [x.day]: t }, careCfg: { ...x.careCfg, meds } }; }),
     markStart: (it) => up((x) => (x.today.startedAt && x.today.startedAt[it.id] ? x : { ...x, today: { ...x.today, startedAt: { ...(x.today.startedAt || {}), [it.id]: { ms: Date.now(), min: nowRef(x) } } } })),
     saveFirstStep: (id, txt) => { up((x) => ({ ...x, tasks: x.tasks.map((t) => (t.id === id ? { ...t, firstStep: txt.trim() } : t)) })); notify('Primeiro passo salvo para as próximas vezes.'); },
@@ -4122,6 +4257,12 @@ function App({ initialTab, onRestart }) {
     logout: async () => { setAcctOpen(false); await Cloud.logout(sRef.current); try { if ('serviceWorker' in navigator) { const reg = await navigator.serviceWorker.getRegistration(); if (reg) (await reg.getNotifications()).forEach((n) => n.close()); } } catch (e) {} try { sessionStorage.setItem('qd-msg', 'Você saiu da conta. Seus dados continuam salvos nela e foram apagados deste aparelho.'); } catch (e) {} onRestart && onRestart(); },
     deleteAccount: async () => { const r = await Cloud.deleteAccount(); setAcctOpen(false); try { sessionStorage.setItem('qd-msg', r && r.login_deleted ? 'Conta excluída. Todos os seus dados foram apagados.' : 'Dados do QuestDay apagados. O login continua existindo porque também é usado no Fluxo Previsto.'); } catch (e) {} onRestart && onRestart(); },
     openAccount: () => setAcctOpen(true),
+    swipeDone: (it) => { if (it.status !== 'pendente') return; act.done(it); setToast({ m: `Feito: ${itemTitle(sRef.current, it)}`, id: Date.now(), undo: () => { const cur = sRef.current.plan.items.find((y) => y.id === it.id); if (cur && cur.status === 'feito') act.toggleDone(cur); } }); },
+    resetAll: async () => {
+      if (Cloud.user) await Cloud.resetData();
+      try { localStorage.removeItem(KEY); localStorage.removeItem('qd-notif'); localStorage.removeItem('qd-local-at'); sessionStorage.setItem('qd-msg', Cloud.user ? 'Pronto, começando do zero. A versão anterior ficou guardada em Conta e aparelhos → Versões anteriores.' : 'Pronto, começando do zero.'); } catch (e) {}
+      setAcctOpen(false); onRestart && onRestart();
+    },
     toast: (m) => notify(m),
     loadRemote: (d, msg) => { if (!d || d.v !== 4) return; setTm(null); setS(fromSaved(d)); notify(msg || 'Trouxe seus dados da nuvem.'); },
     cloudLogin: async () => { const demo = !!sRef.current.demo; const r = await Cloud.reconcile(demo ? null : sRef.current); if (demo && !(r.use === 'remote' && r.data && r.data.v === 4)) { setAcctOpen(false); try { localStorage.removeItem(KEY); } catch (e) {} onRestart && onRestart(); return; } if (r.use === 'remote' && r.data && r.data.v === 4) { setTm(null); setS(fromSaved(r.data)); notify('Pronto: trouxe seus dados da nuvem.'); } else notify('Conta conectada. Seus dados agora ficam salvos na nuvem.'); },
@@ -4255,10 +4396,11 @@ function App({ initialTab, onRestart }) {
           {TABS.map((t) => (
             <li key={t.id}><button onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
               className={`w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2.5 md:px-3 md:rounded-xl text-[11px] md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] ${tab === t.id ? 'text-zinc-50 md:bg-white/[0.06]' : 'text-zinc-500 hover:text-zinc-300'}`}>
-              <Ic n={t.icon} className="w-5 h-5" /><span className="text-center leading-tight">{t.label}{t.sub && <span className="hidden md:inline text-zinc-500"> · {t.sub}</span>}</span></button></li>
+              <Ic n={t.icon} className="w-5 h-5" /><span className="text-center leading-tight"><span className="md:hidden">{t.short || t.label}</span><span className="hidden md:inline">{t.label}</span>{t.sub && <span className="hidden md:inline text-zinc-500"> · {t.sub}</span>}</span></button></li>
           ))}
         </ul>
         <div className="hidden md:block absolute bottom-0 inset-x-0 p-3 border-t border-white/[0.07]">
+          <InstallButton variant="side" className="mb-1" />
           {s.demo && !Cloud.user && <div className="mb-2 rounded-xl border border-[#ffc24d]/25 bg-[#ffc24d]/[0.06] p-3 space-y-2"><p className="text-xs text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</p><button className="w-full text-left text-xs text-zinc-200 underline underline-offset-4 hover:text-white" onClick={act.exitDemo}>Sair da demonstração / Criar conta</button></div>}
           <button onClick={() => setAcctOpen(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff]">
             <span className="w-7 h-7 rounded-full grid place-items-center bg-white/[0.06] text-zinc-300 text-xs font-medium shrink-0">{Cloud.user && Cloud.user.email ? Cloud.user.email[0].toUpperCase() : <Ic n="Users" className="w-3.5 h-3.5" />}</span>
@@ -4267,7 +4409,9 @@ function App({ initialTab, onRestart }) {
       </nav>
       {tab === 'agora' && s.onboarded && !s.tourDone && !acctOpen && <Tour onEnd={() => up((x) => ({ ...x, tourDone: true }))} />}
       {acctOpen && <AccountModal s={s} act={act} onClose={() => setAcctOpen(false)} goSettings={() => { setAcctOpen(false); setTab('cadastro', 'conta'); }} />}
-      <main className="md:pl-56 pb-28 md:pb-12" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
+      {(pull > 0 || pulling) && <div className="md:hidden fixed top-0 inset-x-0 z-30 flex justify-center pointer-events-none" style={{ paddingTop: 'env(safe-area-inset-top)', transform: `translateY(${pulling ? 56 : pull}px)`, transition: pull && !pulling ? 'none' : 'transform .2s' }} aria-live="polite">
+        <div className={`-mt-12 flex items-center gap-2 rounded-full bg-zinc-900 border border-white/10 shadow-xl px-3 py-1.5 text-xs text-zinc-300 ${pulling ? 'pet-float' : ''}`}><Pet mood="alerta" size={24} />{pulling ? 'Atualizando…' : pull >= 64 ? 'Solte para atualizar' : 'Puxe para atualizar'}</div></div>}
+      <main {...ptr} className="md:pl-56 pb-28 md:pb-12" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}>
         {s.demo && !Cloud.user && <div className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-2 bg-[#2a2210]/95 backdrop-blur border-b border-[#ffc24d]/20 text-xs"><span className="text-[#ffd98a] flex items-center gap-1.5"><Ic n="Sparkles" className="w-3.5 h-3.5" />Modo demonstração</span><button className="text-zinc-100 underline underline-offset-4" onClick={act.exitDemo}>Sair / Criar conta</button></div>}
         <div className={`${tab === 'semana' ? 'max-w-[1680px]' : 'max-w-[1320px]'} mx-auto px-4 sm:px-6 lg:px-8 pt-5 md:pt-8 space-y-5`}>
           <TopBar s={s} en={en} setTab={setTab} act={act} bell={<Bell hist={nst.hist} onOpen={() => setNst((v) => { const n = { ...v, hist: v.hist.map((h) => ({ ...h, read: true })) }; nSave(n); return n; })} />} />
@@ -4283,6 +4427,15 @@ function App({ initialTab, onRestart }) {
           <p className="text-xs text-zinc-600 pt-2">{Cloud.user ? `Tudo é editável em Minha Rotina e fica salvo na sua conta (${Cloud.user.email || "nuvem"}).` : "Tudo é editável em Minha Rotina e fica salvo só neste aparelho. Entre na conta em Conta e aparelhos para salvar na nuvem."}</p>
         </div>
       </main>
+      {!chatOpen && <button onClick={() => { haptic(); setFab(true); }} aria-label="Ação rápida: adicionar" className="md:hidden fixed z-40 right-[22px] bottom-[152px] w-12 h-12 rounded-full btn-primary text-zinc-950 grid place-items-center shadow-xl shadow-black/50 press" style={{ marginBottom: 'env(safe-area-inset-bottom)' }}><Ic n="Plus" className="w-5 h-5" /></button>}
+      {fab && <Sheet onClose={() => setFab(false)} label="Ação rápida"><div className="p-5 pt-2 space-y-2">
+        <p className="text-zinc-50 font-medium pb-1">O que você quer fazer?</p>
+        {fab === 'task' ? <AddToDay s={s} d={s.day} act={act} /> : <>
+          <button className={btnG + ' w-full justify-start'} onClick={() => setFab('task')}><Ic n="ListChecks" />Nova tarefa para hoje</button>
+          <button className={btnG + ' w-full justify-start'} onClick={() => { setFab(false); setTab('semana'); act.setUi({ semanaView: 'cal' }); }}><Ic n="CalendarDays" />Marcar compromisso no calendário</button>
+          <button className={btnG + ' w-full justify-start'} onClick={() => { act.water(250); setFab(false); notify('+250 ml de água.'); }}><Ic n="GlassWater" />+250 ml de água</button>
+          <button className={btnG + ' w-full justify-start'} onClick={() => { setFab(false); setChatOpen(true); }}><Ic n="Sparkles" />Falar com o Lume</button></>}
+      </div></Sheet>}
       {!chatOpen && (
         <button onClick={() => setChatOpen(true)} aria-label={`Abrir o assistente Lume (${MOOD_TXT[mood]})`} title="Falar com o Lume"
           className="fixed z-40 right-4 bottom-[84px] md:bottom-6 md:right-6 w-14 h-14 rounded-2xl bg-zinc-900/95 border border-[#9f8fff]/30 shadow-xl shadow-black/50 grid place-items-center hover:border-[#9f8fff]/60 hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] transition-colors">
@@ -4294,7 +4447,7 @@ function App({ initialTab, onRestart }) {
       {focusIt && s.plan.items.find((y) => y.id === focusIt.id) && <FocusMode s={s} it={s.plan.items.find((y) => y.id === focusIt.id)} act={act} onClose={() => setFocusIt(null)} />}
       <AssistantDrawer s={s} en={en} open={chatOpen} onClose={() => setChatOpen(false)} msgs={msgs} setMsgs={setMsgs} runOp={runOp} aiExec={aiExec} act={act} />
       <div aria-live="polite" className="fixed z-40 left-1/2 -translate-x-1/2 bottom-24 md:bottom-8 md:ml-28 w-[min(92vw,440px)] flex justify-center pointer-events-none">
-        {toast && <div key={toast.id} className="toast px-4 py-2.5 rounded-xl bg-zinc-800 border border-white/10 text-sm text-zinc-100 shadow-xl">{toast.m}</div>}
+        {toast && <div key={toast.id} className={`toast px-4 py-2.5 rounded-xl bg-zinc-800 border border-white/10 text-sm text-zinc-100 shadow-xl flex items-center gap-3 ${toast.undo ? 'pointer-events-auto' : ''}`}>{toast.m}{toast.undo && <button className="text-[#cdc4ff] font-medium underline underline-offset-4 min-h-[36px]" onClick={() => { toast.undo(); setToast(null); }}>Desfazer</button>}</div>}
       </div>
       {(ntoast || upd) && <div className="fixed z-[45] left-1/2 -translate-x-1/2 top-3 md:ml-28 w-[min(94vw,460px)] space-y-2" style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}>
         {upd && <div className="toast flex items-center gap-3 px-4 py-2.5 rounded-xl bg-zinc-800 border border-white/10 text-sm text-zinc-100 shadow-xl" role="status"><Ic n="Sparkles" className="w-4 h-4 text-[#9f8fff]" /><span className="flex-1">Nova versão disponível</span><button className="text-[#cdc4ff] font-medium underline underline-offset-4" onClick={() => Pwa.applyUpdate()}>Atualizar</button></div>}
@@ -4421,7 +4574,8 @@ function Onboarding({ onDone, onExample, onCloud }) {
         {cmsg && <p className="text-sm text-zinc-300" role="status">{cmsg}</p>}
       </div>
       <div className="mt-12 sm:mt-14"><button className="text-sm text-zinc-500 hover:text-zinc-300 underline underline-offset-4" onClick={onExample}>Quero só explorar com uma rotina de exemplo</button>
-        <p className="mt-2 text-xs text-zinc-600">Modo demonstração: nada é salvo na nuvem.</p></div>
+        <p className="mt-2 text-xs text-zinc-600">Modo demonstração: nada é salvo na nuvem.</p>
+        <div className="mt-8 flex justify-center"><InstallButton variant="pill" className="text-sm" /></div></div>
     </div>);
   if (step === 1) body = (
     <div className="space-y-6"><Q t="Em um dia normal, que horas você tenta dormir e acordar?" d="Eu uso isso para saber onde o seu dia começa e termina, e para calcular a energia." />

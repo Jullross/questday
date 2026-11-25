@@ -23,7 +23,7 @@ const { chromium } = require('playwright');
   // Semana
   const sem = p.getByRole('button', { name: /^Semana/ }).first(); if (await sem.count()) { await sem.click(); await p.waitForTimeout(400); await p.screenshot({ path: `/tmp/vacsem_${W}.png` }); }
   // Semestre card
-  await p.getByRole('button', { name: /^Minha Rotina/ }).first().click(); await p.waitForTimeout(200);
+  await p.getByRole('button', { name: /^(Minha )?Rotina/ }).first().click(); await p.waitForTimeout(200);
   const ss = p.getByRole('button', { name: /Semestre/ }).first(); if (await ss.count()) { await ss.click(); await p.waitForTimeout(300); }
   const fv = p.getByText('Férias e viagens'); console.log(W, 'semestre card', await fv.count());
   if (await fv.count()) { await fv.first().scrollIntoViewIfNeeded(); await p.screenshot({ path: `/tmp/vaccad_${W}.png` }); }

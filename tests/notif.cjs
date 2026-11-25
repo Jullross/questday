@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
   await p.goto('http://localhost:8000/'); await p.waitForTimeout(500);
   await p.getByRole('button', { name: /explorar com uma rotina de exemplo/ }).click(); await p.waitForTimeout(400);
   // escolhe uma tarefa pendente de hoje e simula 10 min antes dela
-  const info = await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('superplanner-v4')); const it = s.plan.items.filter((i) => i.day === s.day && i.status === 'pendente' && i.kind === 'task' && i.start > 600).sort((a, b) => a.start - b.start)[0]; s.simNow = it.start - 10; s.tourDone = true; s.notify = true; localStorage.setItem('superplanner-v4', JSON.stringify(s)); return { id: it.id, start: it.start }; });
+  const info = await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('superplanner-v4')); const t = s.tasks.find((x) => !x.event) || s.tasks[0]; const it = { id: 'tn1', kind: 'task', ref: t.id, day: s.day, start: 15 * 60, dur: 30, status: 'pendente', ver: 'normal', prio: 'media', load: 'media' }; s.plan.items.push(it); s.simNow = it.start - 10; s.tourDone = true; s.notify = true; localStorage.setItem('superplanner-v4', JSON.stringify(s)); return { id: it.id, start: it.start }; });
   await p.reload(); await p.waitForTimeout(1500);
   const al = p.getByRole('alert'); console.log('toast', await al.count() ? (await al.first().innerText()).replace(/\n/g, ' | ') : 'none');
   console.log('bell label', await p.getByRole('button', { name: /Avisos de hoje/ }).first().getAttribute('aria-label'));

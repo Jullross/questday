@@ -14,7 +14,7 @@
    TYPE   Inter, four sizes
    LAYOUT bottom nav on phone, side rail on desktop */
 %%CSS%%
-:root{color-scheme:dark} html,body{margin:0;background:#0b0c0f} .light,.light body{background:#f7f7fa} @layer base{*{min-width:0}} body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)} @media (min-width:768px){main[style]{padding-bottom:3rem!important}}
+:root{color-scheme:dark} html,body{margin:0;background:#0b0c0f} .light,.light body{background:#f7f7fa} @layer base{*{min-width:0}} html,body{overscroll-behavior-y:none} @media (max-width:767px){.sheet-up{animation:sheetup .26s cubic-bezier(.2,.8,.2,1)}} @media (min-width:768px){.drawer-md{animation:din .22s ease-out}} @keyframes sheetup{from{transform:translateY(100%)}to{transform:none}} @media (hover:none){button:active,[role=tab]:active,[role=switch]:active,label.cursor-pointer:active{transform:scale(.98)}} @media (max-width:767px){.thin-scroll{scrollbar-width:none} .thin-scroll::-webkit-scrollbar{display:none}} body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)} @media (min-width:768px){main[style]{padding-bottom:3rem!important}}
 body{font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
 input[type=time]::-webkit-calendar-picker-indicator,input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.75)}
 .trip-stripes{background:repeating-linear-gradient(135deg,rgba(159,143,255,.10) 0 6px,rgba(159,143,255,.04) 6px 12px)}
@@ -83,7 +83,7 @@ select option{background:#18181b;color:#f4f4f5}
 .pet-z{animation:pz 2.8s ease-in-out infinite} @keyframes pz{0%,100%{opacity:.25;transform:translateY(1px)}50%{opacity:1;transform:translateY(-1.5px)}}
 .drawer-in{animation:din .22s ease-out} @keyframes din{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 .typing{display:inline-flex;gap:3px} .typing i{width:5px;height:5px;border-radius:50%;background:#71717a;animation:ty 1s infinite} .typing i:nth-child(2){animation-delay:.15s} .typing i:nth-child(3){animation-delay:.3s} @keyframes ty{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.pet-blink,.pet-ear-l,.pet-ear-r,.pet-tail,.bar-anim,.toast,.pet-breathe,.pet-breathe-slow,.pet-z,.drawer-in,.typing i,.view-in,.rise,.swap-in,.grow-x,.pop,.chk.pop::after,.live-dot,.flame,.breathe,.confetti i,.pop-in,.pet-float,.lift,.item-card,.press{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){.sheet-up,.drawer-md,.pet-blink,.pet-ear-l,.pet-ear-r,.pet-tail,.bar-anim,.toast,.pet-breathe,.pet-breathe-slow,.pet-z,.drawer-in,.typing i,.view-in,.rise,.swap-in,.grow-x,.pop,.chk.pop::after,.live-dot,.flame,.breathe,.confetti i,.pop-in,.pet-float,.lift,.item-card,.press{transition:none!important;animation:none!important}}
 </style></head><body>
 <div id="root"><p style="color:#a1a1aa;padding:24px;font-family:sans-serif">Carregando…</p></div>
 <script>%%VENDOR%%</script>

@@ -103,6 +103,12 @@ export const Cloud = {
     saveSession(null); setStatus({ sync: 'idle', at: null, aiReady: null }); Cloud.wipeLocal();
     return r;
   },
+  // Recomeçar do zero: o servidor guarda a versão atual em "versões anteriores" e apaga os dados do QuestDay.
+  async resetData() {
+    clearTimeout(pushT); pushT = null; pending = null; lastRem = '';
+    await api('/rest/v1/rpc/qd_reset', { method: 'POST', body: '{}' });
+    ls.set(SEEN_AT, null); ls.set(LOCAL_AT, null); setStatus({ sync: 'idle', at: null });
+  },
   // Sai da conta sem perder nada: sobe o que falta antes.
   async logout(state) { if (state) { try { await Cloud.pushNow(state); } catch (e) {} } await Cloud.signOut(); Cloud.wipeLocal(); },
   // Limpa tudo deste aparelho: sessão, dados do app, histórico de avisos, token do Google (só em memória) e sessionStorage.
@@ -240,7 +246,9 @@ let installEvt = null, waitingSW = null; const updFns = new Set();
 export const Pwa = {
   get canInstall() { return !!installEvt; },
   get installed() { return typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true); },
-  get ios() { return typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent); },
+  get android() { return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent); },
+  get phone() { return typeof navigator !== 'undefined' && (/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent))); },
+  get ios() { return typeof navigator !== 'undefined' && (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(navigator.userAgent))); },
   async install() { if (!installEvt) return false; installEvt.prompt(); const r = await installEvt.userChoice; installEvt = null; emit(); return r.outcome === 'accepted'; },
   // Nova versão do app: o service worker novo fica esperando até a pessoa tocar em "Atualizar".
   onUpdate(fn) { updFns.add(fn); if (waitingSW) fn(); return () => updFns.delete(fn); },
