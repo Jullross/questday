@@ -2252,7 +2252,7 @@ function swipeX(onLeft, onRight, min = 60) {
   let x0 = null, y0 = null;
   return {
     onTouchStart: (e) => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; },
-    onTouchEnd: (e) => { if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null; if (Math.abs(dx) > min && Math.abs(dx) > Math.abs(dy) * 1.6) { haptic(8); (dx < 0 ? onLeft : onRight)(); } },
+    onTouchEnd: (e) => { if (x0 == null) return; const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0; x0 = null; if (Math.abs(dx) > min && Math.abs(dx) > Math.abs(dy) * 1.6) { if ((dx < 0 ? onLeft : onRight)() !== false) { haptic(8); e.stopPropagation(); } } },
   };
 }
 // Bottom sheet no celular (alça + arrastar para baixo fecha); modal centralizado no computador.
@@ -2283,7 +2283,7 @@ function SwipeRow({ onRight, onLeft, rightLabel = 'Feito', leftLabel = 'Adiar', 
   const tm = (e) => { const o = st.current; if (!o) return; const t = e.touches[0], ddx = t.clientX - o.x, ddy = t.clientY - o.y;
     if (o.lock == null && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) o.lock = Math.abs(ddx) > Math.abs(ddy) * 1.3 ? 'x' : 'y';
     if (o.lock !== 'x') return; const v = Math.max(-130, Math.min(130, ddx)); if (!fired.current && Math.abs(v) >= 80) { fired.current = true; haptic(12); } setDx(v); };
-  const te = () => { const v = dxR.current; setDx(0); st.current = null; if (v >= 80 && onRight) onRight(); else if (v <= -80 && onLeft) onLeft(); };
+  const te = (e) => { const v = dxR.current; if (st.current && st.current.lock === 'x') e.stopPropagation(); setDx(0); st.current = null; if (v >= 80 && onRight) onRight(); else if (v <= -80 && onLeft) onLeft(); };
   return (
     <div className="relative rounded-lg overflow-hidden" onTouchStart={ts} onTouchMove={tm} onTouchEnd={te} onTouchCancel={() => { setDx(0); st.current = null; }}>
       {dx !== 0 && <div className={`absolute inset-0 flex items-center px-4 text-sm font-medium ${dx > 0 ? 'justify-start bg-[#2ee8c4]/20 text-[#7ff0d8]' : 'justify-end bg-[#9f8fff]/20 text-[#cdc4ff]'}`} aria-hidden="true">
@@ -2584,7 +2584,7 @@ function SemanaGrid({ s, act, en, weekly, setWeekly }) {
         {shown.map((d) => { const st = stat(d); return <button key={d} onClick={() => setDSel(d)} aria-pressed={dSel === d} className={`shrink-0 w-14 sm:flex-1 sm:min-w-[56px] h-16 rounded-xl flex flex-col items-center justify-center text-sm ${dSel === d ? 'bg-[#9f8fff] text-zinc-950 font-medium' : d === s.day ? 'border border-[#9f8fff]/60 text-zinc-100' : 'text-zinc-300 bg-white/[0.04]'}`}>
           <span className="text-xs">{DIAS[weekdayOf(d)]}</span>{dateOf(d).getUTCDate()}<span className={`text-[10px] ${dSel === d ? 'text-zinc-800' : vacationOn(s, d) ? 'text-[#2ee8c4]' : 'text-zinc-500'}`}>{vacationOn(s, d) ? 'pausa' : st.n ? `${st.n} itens` : 'livre'}</span></button>; })}
       </div>
-      <div className="lg:hidden space-y-2 max-w-2xl" {...swipeX(() => { const i = shown.indexOf(dSel); if (i >= 0 && i < shown.length - 1) setDSel(shown[i + 1]); }, () => { const i = shown.indexOf(dSel); if (i > 0) setDSel(shown[i - 1]); })}><DayList s={s} d={dSel} sel={sel} setSel={setSel} act={act} />{dSel >= s.day && <AddToDay s={s} d={dSel} act={act} />}</div>
+      <div className="lg:hidden space-y-2 max-w-2xl" {...swipeX(() => { const i = shown.indexOf(dSel); if (i >= 0 && i < shown.length - 1) { setDSel(shown[i + 1]); return true; } return false; }, () => { const i = shown.indexOf(dSel); if (i > 0) { setDSel(shown[i - 1]); return true; } return false; })}><DayList s={s} d={dSel} sel={sel} setSel={setSel} act={act} />{dSel >= s.day && <AddToDay s={s} d={dSel} act={act} />}</div>
       <div className="hidden lg:max-[1599px]:flex justify-end gap-1 -mb-2">
         <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5" aria-label="Dias anteriores" onClick={() => gridRef.current && gridRef.current.scrollBy({ left: -230, behavior: 'smooth' })}><Ic n="ChevronLeft" className="w-4 h-4" /></button>
         <button className="w-9 h-9 grid place-items-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5" aria-label="Próximos dias" onClick={() => gridRef.current && gridRef.current.scrollBy({ left: 230, behavior: 'smooth' })}><Ic n="ChevronRight" className="w-4 h-4" /></button>
@@ -3900,7 +3900,7 @@ function App({ initialTab, onRestart }) {
   const [cadSec, setCadSec] = useState('tarefas');
   const setTab = (t, sec) => { if (sec) setCadSec(sec); setTab0(t); try { window.scrollTo({ top: 0 }); } catch (e) {} };
   const [toast, setToast] = useState(null);
-  const [acctOpen, setAcctOpen] = useState(false), [fab, setFab] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(false), [fab, setFab] = useState(false), [swDir, setSwDir] = useState(0);
   // Puxar para atualizar (celular): sincroniza e recalcula o dia.
   const [pull, setPull0] = useState(0), [pulling, setPulling] = useState(false), pst = useRef(null), pullR = useRef(0);
   const setPull = (v) => { pullR.current = v; setPull0(v); };
@@ -3909,10 +3909,18 @@ function App({ initialTab, onRestart }) {
     try { if (Cloud.user) { const d = await Cloud.newerRemote(); if (d && d.v === 4) setS(fromSaved(d)); else { await Cloud.pushNow(sRef.current); setS((x) => fromSaved(x)); } } else setS((x) => fromSaved(x)); } catch (e) {}
     await new Promise((r) => setTimeout(r, 500)); setPulling(false); setPull(0); notify('Tudo em dia.');
   };
+  const tsw = useRef(null);
+  // Deslizar para os lados troca de aba no celular (ignora carrosséis com rolagem lateral e painéis abertos).
+  const hScroller = (el) => { for (let n = el; n && n.tagName !== 'MAIN'; n = n.parentElement) { const ox = getComputedStyle(n).overflowX; if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 2) return true; } return false; };
   const ptr = {
-    onTouchStart: (e) => { pst.current = window.scrollY <= 0 && !pulling && e.target.closest && e.target.closest('main') ? e.touches[0].clientY : null; },
+    onTouchStart: (e) => { const t = e.touches[0], inMain = e.target.closest && e.target.closest('main'); tsw.current = inMain && window.innerWidth < 768 && !hScroller(e.target) ? { x: t.clientX, y: t.clientY } : null; pst.current = window.scrollY <= 0 && !pulling && inMain ? t.clientY : null; },
     onTouchMove: (e) => { if (pst.current == null) return; const d = e.touches[0].clientY - pst.current; if (d > 0 && window.scrollY <= 0) setPull(Math.min(110, d * 0.55)); else if (d < 0) { pst.current = null; setPull(0); } },
-    onTouchEnd: () => { if (pst.current == null) return; pst.current = null; if (pullR.current >= 64) refresh(); else setPull(0); },
+    onTouchEnd: (e) => {
+      const o = tsw.current; tsw.current = null;
+      if (o && pullR.current < 10) { const t = e.changedTouches[0], dx = t.clientX - o.x, dy = t.clientY - o.y;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) { const i = TABS.findIndex((x) => x.id === tab), j = i + (dx < 0 ? 1 : -1); if (j >= 0 && j < TABS.length) { haptic(8); setSwDir(dx < 0 ? 1 : -1); setTab(TABS[j].id); } } }
+      if (pst.current == null) return; pst.current = null; if (pullR.current >= 64) refresh(); else setPull(0);
+    },
   };
   const [chatOpen, setChatOpen] = useState(false);
   const [focusIt, setFocusIt] = useState(null);
@@ -4394,7 +4402,7 @@ function App({ initialTab, onRestart }) {
         <p className="hidden md:block px-6 pb-6 text-zinc-50 font-semibold tracking-tight">QuestDay <span className="text-zinc-500 font-normal">planner</span></p>
         <ul className="grid grid-cols-5 md:grid-cols-1 md:gap-1 md:px-3">
           {TABS.map((t) => (
-            <li key={t.id}><button onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
+            <li key={t.id}><button onClick={() => { setSwDir(0); setTab(t.id); }} aria-current={tab === t.id ? 'page' : undefined}
               className={`w-full flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2.5 md:px-3 md:rounded-xl text-[11px] md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9f8fff] ${tab === t.id ? 'text-zinc-50 md:bg-white/[0.06]' : 'text-zinc-500 hover:text-zinc-300'}`}>
               <Ic n={t.icon} className="w-5 h-5" /><span className="text-center leading-tight"><span className="md:hidden">{t.short || t.label}</span><span className="hidden md:inline">{t.label}</span>{t.sub && <span className="hidden md:inline text-zinc-500"> · {t.sub}</span>}</span></button></li>
           ))}
@@ -4416,7 +4424,7 @@ function App({ initialTab, onRestart }) {
         <div className={`${tab === 'semana' ? 'max-w-[1680px]' : 'max-w-[1320px]'} mx-auto px-4 sm:px-6 lg:px-8 pt-5 md:pt-8 space-y-5`}>
           <TopBar s={s} en={en} setTab={setTab} act={act} bell={<Bell hist={nst.hist} onOpen={() => setNst((v) => { const n = { ...v, hist: v.hist.map((h) => ({ ...h, read: true })) }; nSave(n); return n; })} />} />
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">{tab === 'semana' ? 'Semana · plano da IA' : TABS.find((t) => t.id === tab).label}</h1>
-          <div key={tab} className="view-in space-y-5">
+          <div key={tab} className={`${swDir > 0 ? 'tab-in-r' : swDir < 0 ? 'tab-in-l' : 'view-in'} space-y-5`}>
           {tab === 'agora' && <Agora s={s} up={up} act={act} en={en} timer={timer} setTab={setTab} openFocus={(it) => { act.markStart(it); setFocusIt(it); }} openComp={(it) => { act.markStart(it); setComp({ itemId: it.id, start: Date.now(), every: 15, acked: 0 }); }} openWeekly={() => { setTab('semana'); setWeekly(true); }} />}
           {tab === 'semana' && <Semana s={s} act={act} en={en} weekly={weekly} setWeekly={setWeekly} />}
           {tab === 'cuidar' && <Cuidar s={s} act={act} setTab={setTab} />}
